@@ -1,9 +1,11 @@
 import { MongoClient, type Db } from "mongodb";
 
 import { env } from "@/lib/config";
+import { ensureAuthIndexes } from "@/lib/db/indexes";
 
 declare global {
   var mongoClientPromise: Promise<MongoClient> | undefined;
+  var mongoDatabasePromise: Promise<Db> | undefined;
 }
 
 function getClientPromise() {
@@ -20,6 +22,11 @@ function getClientPromise() {
 }
 
 export async function getDatabase(): Promise<Db> {
-  const client = await getClientPromise();
-  return client.db(env.MONGODB_DB_NAME);
+  if (global.mongoDatabasePromise) return global.mongoDatabasePromise;
+  global.mongoDatabasePromise = getClientPromise().then(async (client) => {
+    const database = client.db(env.MONGODB_DB_NAME);
+    await ensureAuthIndexes(database);
+    return database;
+  });
+  return global.mongoDatabasePromise;
 }
