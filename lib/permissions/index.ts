@@ -1,8 +1,8 @@
 import type { OrganizationRole } from "@/types/domain";
 
 export const rolePermissions = {
-  OWNER: ["organization:manage", "exhibition:manage", "map:edit", "booking:manage", "finance:view"],
-  ORGANIZER_ADMIN: ["exhibition:manage", "map:edit", "booking:manage", "finance:view"],
+  OWNER: ["organization:manage", "exhibition:view", "exhibition:manage", "map:edit", "booking:view", "booking:manage", "finance:view"],
+  ORGANIZER_ADMIN: ["exhibition:view", "exhibition:manage", "map:edit", "booking:view", "booking:manage", "finance:view"],
   ORGANIZER_STAFF: ["exhibition:view", "booking:view"],
   MAP_EDITOR: ["exhibition:view", "map:edit"],
   FINANCE: ["exhibition:view", "booking:view", "finance:view", "finance:manage"],
