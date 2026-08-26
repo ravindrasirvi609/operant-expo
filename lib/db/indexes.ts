@@ -24,5 +24,8 @@ export async function ensureAuthIndexes(database: Db) {
     database.collection("bookings").createIndex({ stallId: 1, status: 1 }),
     database.collection("bookings").createIndex({ stallId: 1 }, { unique: true, partialFilterExpression: { status: { $in: ["HELD", "PAYMENT_PENDING", "CONFIRMED"] } } }),
     database.collection("reservationHolds").createIndex({ stallId: 1 }, { unique: true, partialFilterExpression: { status: "ACTIVE" } }),
+    database.collection("payments").createIndex({ provider: 1, providerReference: 1 }, { unique: true, sparse: true }),
+    database.collection("invoices").createIndex({ organizationId: 1, invoiceNumber: 1 }, { unique: true }),
+    database.collection("emailEvents").createIndex({ status: 1, createdAt: 1 }),
   ]);
 }
