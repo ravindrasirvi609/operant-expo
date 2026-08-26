@@ -3,6 +3,7 @@
 :root {
   --background: #ffffff;
   --foreground: #171717;
+  color-scheme: light;
 }
 
 @theme inline {
@@ -16,7 +17,24 @@
   :root {
     --background: #0a0a0a;
     --foreground: #ededed;
+    color-scheme: dark;
   }
+
+  body { background: #0a0a0a; color: #ededed; }
+  .bg-white { background-color: #18181b; }
+  .bg-zinc-50 { background-color: #09090b; }
+  .bg-zinc-100 { background-color: #27272a; }
+  .bg-zinc-900 { background-color: #f4f4f5; color: #18181b; }
+  .text-black, .text-zinc-950 { color: #fafafa; }
+  .text-zinc-600 { color: #d4d4d8; }
+  .text-zinc-500 { color: #a1a1aa; }
+  .text-zinc-400 { color: #a1a1aa; }
+  .border-zinc-200, .border-zinc-300 { border-color: #3f3f46; }
+  .border-dashed { border-color: #52525b; }
+  input, textarea, select { background-color: #18181b; color: #f4f4f5; border-color: #52525b; }
+  input::placeholder, textarea::placeholder { color: #a1a1aa; }
+  option { background-color: #18181b; color: #f4f4f5; }
+  .shadow-sm { --tw-shadow-color: rgb(0 0 0 / 0.35); }
 }
 
 body {

@@ -1,0 +1,18 @@
+import { notFound } from "next/navigation";
+
+import { MapViewer } from "@/components/exhibition-map/viewer";
+import { getDatabase } from "@/lib/db/client";
+import type { ExhibitionDocument, HallDocument } from "@/models/exhibition";
+import type { AssetDocument, FloorPlanDocument, MapElementDocument } from "@/models/map";
+import type { StallDocument } from "@/models/stall";
+
+export default async function PublicExhibitionPage({ params }: { params: Promise<{ exhibitionSlug: string }> }) {
+  const { exhibitionSlug } = await params;
+  const database = await getDatabase();
+  const exhibition = await database.collection<ExhibitionDocument>("exhibitions").findOne({ slug: exhibitionSlug, lifecycle: { $in: ["PUBLISHED", "BOOKING_OPEN", "BOOKING_CLOSED"] } });
+  if (!exhibition?._id) notFound();
+  const halls = await database.collection<HallDocument>("halls").find({ exhibitionId: exhibition._id, status: "ACTIVE", publicVisibility: true }).toArray();
+  const maps = await Promise.all(halls.map(async (hall) => { const plan = await database.collection<FloorPlanDocument>("floorPlans").findOne({ hallId: hall._id, status: "PUBLISHED" }, { sort: { version: -1 } }); if (!plan) return { hall, plan: null, elements: [], asset: null, stalls: [] }; const [elements, asset, stalls] = await Promise.all([database.collection<MapElementDocument>("mapElements").find({ floorPlanId: plan._id, visible: true }).toArray(), plan.backgroundAssetId ? database.collection<AssetDocument>("assets").findOne({ _id: plan.backgroundAssetId }) : null, database.collection<StallDocument>("stalls").find({ hallId: hall._id, visibility: "PUBLIC" }).sort({ stallNumber: 1 }).toArray()]); return { hall, plan, elements, asset, stalls }; }));
+  return <main className="mx-auto max-w-7xl px-6 py-12"><div className="max-w-3xl"><p className="text-sm font-medium text-indigo-600">Exhibition booking</p><h1 className="mt-2 text-4xl font-semibold tracking-tight">{exhibition.name}</h1><p className="mt-4 text-zinc-600">{exhibition.description}</p><p className="mt-3 text-sm text-zinc-500">{new Date(exhibition.startDate).toLocaleDateString()} – {new Date(exhibition.endDate).toLocaleDateString()}</p></div><div className="mt-10 space-y-10">{maps.map(({ hall, plan, elements, asset, stalls }) => <section key={hall._id!.toString()} className="rounded-2xl border bg-white p-6 shadow-sm"><div className="flex items-center justify-between"><div><h2 className="text-2xl font-semibold">{hall.name}</h2><p className="mt-1 text-sm text-zinc-500">{stalls.length} public stalls</p></div><span className="rounded-full bg-zinc-100 px-3 py-1 text-xs">{plan ? "Map available" : "Map coming soon"}</span></div>{plan ? <div className="mt-6"><MapViewer width={plan.canvasWidth} height={plan.canvasHeight} backgroundUrl={asset?.url} elements={elements.map((element) => ({ ...element, _id: element._id!.toString() }))} /></div> : <p className="mt-6 text-zinc-500">This hall has not published a booking map yet.</p>}</section>)}</div></main>;
+}
+

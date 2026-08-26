@@ -23,3 +23,16 @@ export const mapElementSchema = z.object({
   zIndex: z.number().int().default(1),
 });
 
+export const stallSchema = z.object({
+  floorPlanElementId: z.string().min(1),
+  stallNumber: z.string().trim().min(1).max(40),
+  section: z.string().trim().max(40).optional(),
+  stallType: z.enum(["STANDARD", "PREMIUM", "CORNER", "ISLAND", "RAW_SPACE", "SHELL_SCHEME"]),
+  width: z.coerce.number().positive(),
+  height: z.coerce.number().positive(),
+  basePrice: z.coerce.number().nonnegative(),
+  currency: z.string().trim().length(3).transform((value) => value.toUpperCase()),
+  description: z.string().trim().max(500).optional(),
+  amenities: z.array(z.string().trim().max(80)).max(20).default([]),
+  visibility: z.enum(["PUBLIC", "PRIVATE"]).default("PUBLIC"),
+});
