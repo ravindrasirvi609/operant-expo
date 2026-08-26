@@ -1,0 +1,6 @@
+import Link from "next/link";
+
+export default function RegisterPage() {
+  return <main className="mx-auto flex min-h-screen w-full max-w-md items-center px-6"><form action="/api/auth/register" method="post" className="w-full space-y-4 rounded-2xl border border-zinc-200 bg-white p-8 shadow-sm"><div><p className="text-sm font-medium text-indigo-600">Operant Expo</p><h1 className="mt-2 text-3xl font-semibold tracking-tight">Create your workspace</h1></div><input name="name" required placeholder="Your name" className="w-full rounded-lg border p-3" /><input name="organizationName" required placeholder="Organization name" className="w-full rounded-lg border p-3" /><input name="organizationSlug" required placeholder="organization-slug" pattern="[a-z0-9]+(?:-[a-z0-9]+)*" className="w-full rounded-lg border p-3" /><input name="email" type="email" required placeholder="Email" className="w-full rounded-lg border p-3" /><input name="password" type="password" minLength={8} required placeholder="Password (8+ characters)" className="w-full rounded-lg border p-3" /><button className="w-full rounded-lg bg-indigo-600 p-3 font-medium text-white">Create account</button><p className="text-sm text-zinc-500">Already registered? <Link className="text-indigo-600" href="/login">Sign in</Link></p></form></main>;
+}
+
