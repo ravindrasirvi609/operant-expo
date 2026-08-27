@@ -1,10 +1,10 @@
-import type { Db } from "mongodb";
+import type { ClientSession, Db } from "mongodb";
 
 import type { EmailEventDocument } from "@/models/commercial";
 
-export async function queueEmail(database: Db, event: Omit<EmailEventDocument, "_id" | "attempts" | "status" | "createdAt">) {
+export async function queueEmail(database: Db, event: Omit<EmailEventDocument, "_id" | "attempts" | "status" | "createdAt">, session?: ClientSession) {
   const email: EmailEventDocument = { ...event, status: "PENDING", attempts: 0, createdAt: new Date() };
-  await database.collection<EmailEventDocument>("emailEvents").insertOne(email);
+  await database.collection<EmailEventDocument>("emailEvents").insertOne(email, session ? { session } : undefined);
   return email;
 }
 
@@ -19,4 +19,3 @@ export async function sendQueuedEmail(database: Db, emailId: string) {
   await database.collection<EmailEventDocument>("emailEvents").updateOne({ _id: email._id }, { $set: { status: "SENT", providerId: result.id, sentAt: new Date() }, $inc: { attempts: 1 } });
   return result;
 }
-

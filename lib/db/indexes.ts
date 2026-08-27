@@ -21,11 +21,15 @@ export async function ensureAuthIndexes(database: Db) {
     database.collection("reservationHolds").createIndex({ expiresAt: 1 }, { expireAfterSeconds: 0 }),
     database.collection("reservationHolds").createIndex({ stallId: 1, status: 1 }),
     database.collection("bookings").createIndex({ bookingNumber: 1 }, { unique: true }),
+    database.collection("bookings").createIndex({ idempotencyKey: 1 }, { unique: true, sparse: true }),
     database.collection("bookings").createIndex({ stallId: 1, status: 1 }),
     database.collection("bookings").createIndex({ stallId: 1 }, { unique: true, partialFilterExpression: { status: { $in: ["HELD", "PAYMENT_PENDING", "CONFIRMED"] } } }),
     database.collection("reservationHolds").createIndex({ stallId: 1 }, { unique: true, partialFilterExpression: { status: "ACTIVE" } }),
     database.collection("payments").createIndex({ provider: 1, providerReference: 1 }, { unique: true, sparse: true }),
     database.collection("invoices").createIndex({ organizationId: 1, invoiceNumber: 1 }, { unique: true }),
     database.collection("emailEvents").createIndex({ status: 1, createdAt: 1 }),
+    database.collection("paymentWebhookEvents").createIndex({ eventId: 1 }, { unique: true }),
+    database.collection("auditLogs").createIndex({ organizationId: 1, createdAt: -1 }),
+    database.collection("auditLogs").createIndex({ entityType: 1, entityId: 1, createdAt: -1 }),
   ]);
 }

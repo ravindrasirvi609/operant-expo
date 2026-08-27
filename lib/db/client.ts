@@ -30,3 +30,7 @@ export async function getDatabase(): Promise<Db> {
   });
   return global.mongoDatabasePromise;
 }
+
+export async function getMongoClient(): Promise<MongoClient> {
+  return getClientPromise();
+}
