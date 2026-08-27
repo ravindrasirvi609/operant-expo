@@ -1,11 +1,13 @@
 import { NextResponse } from "next/server";
+import { ObjectId } from "mongodb";
+import { getCurrentUser } from "@/lib/auth/session";
+import { getDatabase } from "@/lib/db/client";
+import type { MembershipDocument, OrganizationDocument } from "@/models/auth";
 
-import { requireOrganizationContext } from "@/lib/auth/authorization";
-
-export async function GET(request: Request) {
-  const organizationId = new URL(request.url).searchParams.get("organizationId");
-  if (!organizationId) return NextResponse.json({ error: "organizationId is required" }, { status: 400 });
-  const context = await requireOrganizationContext(organizationId);
-  return NextResponse.json({ organization: context.organization, membership: context.membership });
+export async function POST(request: Request) {
+  const user = await getCurrentUser(); if (!user?._id) return NextResponse.json({ error: "Authentication required" }, { status: 401 });
+  const body = await request.json() as { name?: string; slug?: string }; if (!body.name?.trim() || !body.slug?.match(/^[a-z0-9]+(?:-[a-z0-9]+)*$/)) return NextResponse.json({ error: "Valid name and slug are required" }, { status: 400 });
+  const database = await getDatabase(); const now = new Date(); const organizationId = new ObjectId(); const organization: OrganizationDocument = { _id: organizationId, name: body.name.trim(), slug: body.slug, status: "ACTIVE", createdAt: now, updatedAt: now }; const membership: MembershipDocument = { _id: new ObjectId(), organizationId, userId: user._id, role: "OWNER", scopes: ["*"], status: "ACTIVE", createdAt: now, updatedAt: now };
+  try { await database.collection<OrganizationDocument>("organizations").insertOne(organization); await database.collection<MembershipDocument>("memberships").insertOne(membership); return NextResponse.json({ organization }, { status: 201 }); } catch { return NextResponse.json({ error: "Organization slug already exists" }, { status: 409 }); }
 }
 
