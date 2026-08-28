@@ -5,6 +5,8 @@ import { hashPassword } from "@/lib/auth/password";
 import { createSession, setSessionCookie } from "@/lib/auth/session";
 import { registrationSchema } from "@/lib/auth/input";
 import { getDatabase } from "@/lib/db/client";
+import { withTransaction } from "@/lib/db/transaction";
+import { writeAudit } from "@/lib/audit";
 import { readBody } from "@/lib/http/body";
 import type { MembershipDocument, OrganizationDocument, UserDocument } from "@/models/auth";
 
@@ -26,9 +28,12 @@ export async function POST(request: Request) {
   const membership: MembershipDocument = { organizationId, userId, role: "OWNER", scopes: ["*"], status: "ACTIVE", createdAt: now, updatedAt: now };
 
   try {
-    await database.collection<UserDocument>("users").insertOne(user);
-    await database.collection<OrganizationDocument>("organizations").insertOne(organization);
-    await database.collection<MembershipDocument>("memberships").insertOne(membership);
+    await withTransaction(database, async (session) => {
+      await database.collection<UserDocument>("users").insertOne(user, { session });
+      await database.collection<OrganizationDocument>("organizations").insertOne(organization, { session });
+      await database.collection<MembershipDocument>("memberships").insertOne(membership, { session });
+      await writeAudit(database, { organizationId, actorId: userId, action: "organization.created", entityType: "Organization", entityId: organizationId.toString(), after: { name: organizationName, slug: organizationSlug } }, session);
+    });
     const session = await createSession(userId);
     await setSessionCookie(session.token, session.expiresAt);
     if (!request.headers.get("content-type")?.includes("application/json")) {

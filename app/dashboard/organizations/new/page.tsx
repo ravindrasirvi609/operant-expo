@@ -2,5 +2,42 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 
-export default function NewOrganizationPage(){const router=useRouter();const[error,setError]=useState("");const[saving,setSaving]=useState(false);async function submit(e:React.FormEvent<HTMLFormElement>){e.preventDefault();setSaving(true);const body=Object.fromEntries(new FormData(e.currentTarget));const r=await fetch("/api/organizations",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});const d=await r.json();if(!r.ok)setError(d.error??"Unable to create organization");else router.push("/dashboard/exhibitions");setSaving(false)}return <main className="mx-auto max-w-xl px-6 py-12"><p className="text-sm font-semibold uppercase tracking-widest text-indigo-600">Workspace settings</p><h1 className="mt-2 text-3xl font-semibold">Create an organization</h1><p className="mt-3 text-zinc-500">Create another isolated workspace for a different business or event team.</p>{error&&<p role="alert" className="mt-5 rounded-lg bg-red-50 p-3 text-sm text-red-700">{error}</p>}<form onSubmit={submit} className="mt-8 space-y-4 rounded-2xl border bg-white p-6 shadow-sm"><input name="name" required placeholder="Organization name" className="w-full rounded-lg border p-3"/><input name="slug" required pattern="[a-z0-9]+(?:-[a-z0-9]+)*" placeholder="organization-slug" className="w-full rounded-lg border p-3"/><button disabled={saving} className="w-full rounded-lg bg-indigo-600 p-3 font-semibold text-white disabled:opacity-50">{saving?"Creating…":"Create organization"}</button></form></main>}
+import { SectionEyebrow } from "@/components/ui/section-eyebrow";
+import { DimensionDivider } from "@/components/ui/dimension-divider";
+import { parseJsonResponse } from "@/lib/http/client";
 
+export default function NewOrganizationPage() {
+  const router = useRouter();
+  const [error, setError] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  async function submit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setSaving(true);
+    setError("");
+    const body = Object.fromEntries(new FormData(event.currentTarget));
+    const response = await fetch("/api/organizations", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+    const data = await parseJsonResponse<{ error?: string }>(response);
+    if (!response.ok || data.error) {
+      setError(data.error ?? "Unable to create organization");
+      setSaving(false);
+      return;
+    }
+    router.push("/dashboard/exhibitions");
+  }
+
+  return (
+    <main className="mx-auto max-w-xl px-6 py-12">
+      <SectionEyebrow>Workspace settings</SectionEyebrow>
+      <h1 className="mt-2 font-display text-3xl font-semibold text-[var(--ink)]">Create an organization</h1>
+      <p className="mt-3 text-[var(--ink-soft)]">Create another isolated workspace for a different business or event team.</p>
+      <DimensionDivider className="mt-6" />
+      {error && <p role="alert" className="mt-5 rounded-md border border-[var(--booked)] bg-[color-mix(in_srgb,var(--booked)_10%,transparent)] p-3 text-sm text-[var(--booked)]">{error}</p>}
+      <form onSubmit={submit} className="corner-marks mt-8 space-y-4 rounded-2xl border border-[var(--line)] bg-[var(--paper-raised)] p-6 shadow-sm">
+        <input name="name" required placeholder="Organization name" className="w-full rounded-md border border-[var(--line-strong)] bg-transparent p-3" />
+        <input name="slug" required pattern="[a-z0-9]+(?:-[a-z0-9]+)*" title="Lowercase letters, numbers and hyphens only" placeholder="organization-slug" className="w-full rounded-md border border-[var(--line-strong)] bg-transparent p-3" />
+        <button disabled={saving} className="w-full rounded-md bg-[var(--accent)] p-3 font-medium text-[var(--accent-ink)] disabled:opacity-50">{saving ? "Creating…" : "Create organization"}</button>
+      </form>
+    </main>
+  );
+}

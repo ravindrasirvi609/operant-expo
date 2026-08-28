@@ -1,44 +1,153 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --paper: #f7f5ef;
+  --paper-raised: #ffffff;
+  --ink: #142b42;
+  --ink-soft: #4c6178;
+  --ink-faint: #7c8ba0;
+  --accent: #e2963c;
+  --accent-ink: #7a4a12;
+  --line: #d9dee6;
+  --line-strong: #b9c3d1;
+  --available: #2f9e6e;
+  --held: #e2963c;
+  --booked: #c1502e;
+  --blocked: #8a94a6;
+  --pending: #c1502e;
+  --background: var(--paper);
+  --foreground: var(--ink);
   color-scheme: light;
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --color-paper: var(--paper);
+  --color-paper-raised: var(--paper-raised);
+  --color-ink: var(--ink);
+  --color-ink-soft: var(--ink-soft);
+  --color-accent: var(--accent);
+  --color-line: var(--line);
+  --font-sans: var(--font-inter);
+  --font-display: var(--font-space-grotesk);
+  --font-mono: var(--font-plex-mono);
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+    --paper: #0e1a26;
+    --paper-raised: #14222f;
+    --ink: #e8edf3;
+    --ink-soft: #9fb0c3;
+    --ink-faint: #6c7f94;
+    --accent: #f0ac52;
+    --accent-ink: #2a1a05;
+    --line: #26374a;
+    --line-strong: #33465c;
+    --available: #3fbe84;
+    --held: #f0ac52;
+    --booked: #e2694a;
+    --blocked: #5b6b7f;
+    --pending: #e2694a;
+    --background: var(--paper);
+    --foreground: var(--ink);
     color-scheme: dark;
   }
 
-  body { background: #0a0a0a; color: #ededed; }
-  .bg-white { background-color: #18181b; }
-  .bg-zinc-50 { background-color: #09090b; }
-  .bg-zinc-100 { background-color: #27272a; }
-  .bg-zinc-900 { background-color: #f4f4f5; color: #18181b; }
-  .text-black, .text-zinc-950 { color: #fafafa; }
-  .text-zinc-600 { color: #d4d4d8; }
-  .text-zinc-500 { color: #a1a1aa; }
-  .text-zinc-400 { color: #a1a1aa; }
-  .border-zinc-200, .border-zinc-300 { border-color: #3f3f46; }
-  .border-dashed { border-color: #52525b; }
-  input, textarea, select { background-color: #18181b; color: #f4f4f5; border-color: #52525b; }
-  input::placeholder, textarea::placeholder { color: #a1a1aa; }
-  option { background-color: #18181b; color: #f4f4f5; }
-  .shadow-sm { --tw-shadow-color: rgb(0 0 0 / 0.35); }
+  .bg-white { background-color: var(--paper-raised); }
+  .bg-zinc-50 { background-color: var(--paper); }
+  .bg-zinc-100 { background-color: #1c2c3d; }
+  .bg-zinc-900 { background-color: var(--ink); color: var(--paper-raised); }
+  .text-black, .text-zinc-950 { color: var(--ink); }
+  .text-zinc-600 { color: var(--ink-soft); }
+  .text-zinc-500 { color: var(--ink-soft); }
+  .text-zinc-400 { color: var(--ink-faint); }
+  .border-zinc-200, .border-zinc-300 { border-color: var(--line); }
+  .border-dashed { border-color: var(--line-strong); }
+  input, textarea, select { background-color: var(--paper-raised); color: var(--ink); border-color: var(--line-strong); }
+  input::placeholder, textarea::placeholder { color: var(--ink-faint); }
+  option { background-color: var(--paper-raised); color: var(--ink); }
+  .shadow-sm { --tw-shadow-color: rgb(0 0 0 / 0.5); }
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-sans), Arial, Helvetica, sans-serif;
 }
+
+h1, h2, h3, .font-display {
+  font-family: var(--font-display), var(--font-sans), sans-serif;
+}
+
+.font-mono, .tabular {
+  font-family: var(--font-mono), ui-monospace, monospace;
+}
+
+/* Signature: faint blueprint grid-paper texture. Applied sparingly (hero/backdrops only). */
+.bg-blueprint-grid {
+  background-image:
+    linear-gradient(var(--line) 1px, transparent 1px),
+    linear-gradient(90deg, var(--line) 1px, transparent 1px);
+  background-size: 32px 32px;
+  background-position: -1px -1px;
+}
+
+@media (prefers-color-scheme: dark) {
+  .bg-blueprint-grid { opacity: 0.9; }
+}
+
+/* Signature: drafting corner-registration marks, shown on focus/selected/hover state. */
+.corner-marks {
+  position: relative;
+}
+.corner-marks::before,
+.corner-marks::after {
+  content: "";
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  border: 1.5px solid var(--accent);
+  opacity: 0;
+  transition: opacity 150ms ease;
+  pointer-events: none;
+}
+.corner-marks::before {
+  top: -6px;
+  left: -6px;
+  border-right: none;
+  border-bottom: none;
+}
+.corner-marks::after {
+  bottom: -6px;
+  right: -6px;
+  border-left: none;
+  border-top: none;
+}
+.corner-marks:hover::before,
+.corner-marks:hover::after,
+.corner-marks[data-active="true"]::before,
+.corner-marks[data-active="true"]::after {
+  opacity: 1;
+}
+
+/* Signature: dimension-tick divider — a hairline rule with short perpendicular ticks at each end,
+   evoking an architectural dimension line, in place of a plain <hr>. */
+.dimension-divider {
+  position: relative;
+  height: 1px;
+  background: var(--line);
+  margin: 0;
+}
+.dimension-divider::before,
+.dimension-divider::after {
+  content: "";
+  position: absolute;
+  top: -4px;
+  width: 1px;
+  height: 9px;
+  background: var(--line-strong);
+}
+.dimension-divider::before { left: 0; }
+.dimension-divider::after { right: 0; }
