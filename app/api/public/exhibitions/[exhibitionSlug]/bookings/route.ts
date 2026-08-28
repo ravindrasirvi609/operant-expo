@@ -21,7 +21,10 @@ export async function POST(request: Request, { params }: { params: Promise<{ exh
   const idempotencyKey = request.headers.get("idempotency-key")?.trim(); const database = await getDatabase();
   if (idempotencyKey) { const existing = await database.collection<BookingDocument>("bookings").findOne({ idempotencyKey }); if (existing) return NextResponse.json({ booking: { id: existing._id!.toString(), bookingNumber: existing.bookingNumber, status: existing.status, total: existing.commercialSnapshot.total, currency: existing.commercialSnapshot.currency }, idempotentReplay: true }); }
   const now = new Date(); const exhibition = await database.collection<ExhibitionDocument>("exhibitions").findOne({ slug: exhibitionSlug, lifecycle: "BOOKING_OPEN" });
-  const stall = exhibition?._id ? await database.collection<StallDocument>("stalls").findOne({ _id: new ObjectId(parsed.data.stallId), exhibitionId: exhibition._id, status: "AVAILABLE", visibility: "PUBLIC" }) : null;
+  // AVAILABLE or HELD are both bookable here — a stall the visitor legitimately holds was already
+  // flipped to HELD by the hold route, so requiring AVAILABLE would reject every real booking.
+  // The ACTIVE, non-expired hold check just below is the actual gate against double-booking.
+  const stall = exhibition?._id ? await database.collection<StallDocument>("stalls").findOne({ _id: new ObjectId(parsed.data.stallId), exhibitionId: exhibition._id, status: { $in: ["AVAILABLE", "HELD"] }, visibility: "PUBLIC" }) : null;
   if (!exhibition?._id || !stall?._id) return NextResponse.json({ error: "Stall is no longer available" }, { status: 409 });
   const hold = await database.collection<ReservationHoldDocument>("reservationHolds").findOne({ stallId: stall._id, status: "ACTIVE", expiresAt: { $gt: now } });
   if (!hold?._id) return NextResponse.json({ error: "Your reservation has expired. Please reserve the stall again." }, { status: 409 });

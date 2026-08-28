@@ -40,7 +40,19 @@ export default async function MapPage({ params, searchParams }: { params: Promis
         {plan.status === "DRAFT" && <PublishMapButton organizationId={organizationId} floorPlanId={plan._id!.toString()} />}
       </div>
       <div className="mt-6">
-        <MapViewer width={plan.canvasWidth} height={plan.canvasHeight} backgroundUrl={asset?.url} elements={elements.map((element) => ({ ...element, _id: element._id!.toString() }))} />
+        <MapViewer
+          width={plan.canvasWidth}
+          height={plan.canvasHeight}
+          backgroundUrl={asset?.url}
+          elements={elements.map((element) => ({
+            _id: element._id!.toString(),
+            type: element.type,
+            label: element.label,
+            status: element.status,
+            geometry: element.geometry,
+            visible: element.visible,
+          }))}
+        />
       </div>
     </main>
   );

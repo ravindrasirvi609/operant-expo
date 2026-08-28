@@ -134,7 +134,11 @@ export default function Editor({ params, searchParams }: { params: Promise<{ exh
   function begin(e: React.PointerEvent, element: Element, mode: DragMode) {
     e.preventDefault();
     e.stopPropagation();
-    if (!selectedIds.includes(element._id)) setSelectedIds([element._id]);
+    // A plain pointerdown on an unselected element selects just that element (so a drag always
+    // has something valid to move). A shift-click must NOT collapse the selection here — the
+    // click handler (selectElement) owns shift-click add/remove toggling, and runs right after
+    // this same gesture's pointerup. Touching selection here on a shift-click would race with it.
+    if (!e.shiftKey && !selectedIds.includes(element._id)) setSelectedIds([element._id]);
     pushHistory();
     // The rotate handle needs the element's center in viewport coordinates (to match
     // e.clientX/clientY), not canvas-logical coordinates — the canvas renders at 1:1 scale, so

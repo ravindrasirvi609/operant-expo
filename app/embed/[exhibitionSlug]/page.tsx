@@ -45,7 +45,15 @@ export default async function EmbedExhibitionPage({ params }: { params: Promise<
                   backgroundUrl={asset?.url}
                   elements={elements.map((element) => {
                     const stall = stalls.find((item) => item.floorPlanElementId?.toString() === element._id?.toString());
-                    return { ...element, _id: element._id!.toString(), stallId: stall?._id?.toString(), status: stall?.status ?? element.status };
+                    return {
+                      _id: element._id!.toString(),
+                      type: element.type,
+                      label: element.label,
+                      geometry: element.geometry,
+                      visible: element.visible,
+                      stallId: stall?._id?.toString(),
+                      status: stall?.status ?? element.status,
+                    };
                   })}
                 />
               </div>

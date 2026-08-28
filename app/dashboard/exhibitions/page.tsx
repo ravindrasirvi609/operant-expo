@@ -73,13 +73,17 @@ export default function Exhibitions() {
 
   async function submit(event: React.FormEvent<HTMLFormElement>, path: string, done: (d: Record<string, unknown>) => void) {
     event.preventDefault();
+    // Capture the form before the first await — React's SyntheticEvent's currentTarget goes
+    // null once the DOM event finishes dispatching, which happens well before an async handler
+    // resumes after its first await.
+    const form = event.currentTarget;
     setSaving(true); setError("");
     try {
-      const r = await fetch(path, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(Object.fromEntries(new FormData(event.currentTarget))) });
-      const d = await r.json();
-      if (!r.ok) throw new Error(d.error ?? "Request failed");
+      const r = await fetch(path, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(Object.fromEntries(new FormData(form))) });
+      const d = await parseJsonResponse(r);
+      if (!r.ok || d.error) throw new Error(d.error ?? "Request failed");
       done(d);
-      event.currentTarget.reset();
+      form.reset();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Request failed");
     } finally {
