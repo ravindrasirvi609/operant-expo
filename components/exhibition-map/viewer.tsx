@@ -14,7 +14,7 @@ const LEGEND: Array<{ status: string; label: string }> = [
   { status: "BLOCKED", label: "Blocked" },
 ];
 
-export function MapViewer({ width, height, backgroundUrl, elements }: { width: number; height: number; backgroundUrl?: string; elements: Element[] }) {
+export function MapViewer({ width, height, backgroundUrl, elements, bookingBasePath = "/exhibitions" }: { width: number; height: number; backgroundUrl?: string; elements: Element[]; bookingBasePath?: string }) {
   const [zoom, setZoom] = useState(1);
   const [selected, setSelected] = useState<string | null>(null);
   const pan = useRef<{ startX: number; startY: number; scrollLeft: number; scrollTop: number } | null>(null);
@@ -25,8 +25,11 @@ export function MapViewer({ width, height, backgroundUrl, elements }: { width: n
   function selectElement(element: Element) {
     setSelected(element._id);
     if (element.stallId && element.status !== "BOOKED" && element.status !== "BLOCKED") {
+      // The slug sits at path segment 2 under both /exhibitions/{slug} and /embed/{slug} — only
+      // the base path differs, which callers control via bookingBasePath so the widget never
+      // navigates a visitor out of the iframe and onto the full-chrome public page.
       const slug = window.location.pathname.split("/")[2];
-      router.push(`/exhibitions/${slug}/book/${element.stallId}`);
+      router.push(`${bookingBasePath}/${slug}/book/${element.stallId}`);
     }
   }
 

@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { SectionEyebrow } from "@/components/ui/section-eyebrow";
 import { DimensionDivider } from "@/components/ui/dimension-divider";
 import { StatusBadge } from "@/components/ui/status-badge";
+import { EmbedCodePanel } from "@/components/dashboard/embed-code-panel";
 import { parseJsonResponse } from "@/lib/http/client";
 
 type Org = { _id: string; name: string };
@@ -134,6 +135,11 @@ export default function Exhibitions() {
                       {e.lifecycle === "BOOKING_OPEN" && <button disabled={saving} onClick={() => void lifecycle(e, "BOOKING_CLOSED")} className="rounded-md bg-[var(--held)] px-3 py-2 text-xs font-semibold text-[var(--accent-ink)] disabled:opacity-50">Close booking</button>}
                       {["PUBLISHED", "BOOKING_OPEN", "BOOKING_CLOSED"].includes(e.lifecycle) && <a href={`/exhibitions/${e.slug}`} target="_blank" className="rounded-md border border-[var(--line-strong)] px-3 py-2 text-xs font-semibold text-[var(--ink)]">View public page ↗</a>}
                     </div>
+                    {["PUBLISHED", "BOOKING_OPEN", "BOOKING_CLOSED"].includes(e.lifecycle) && (
+                      <div className="mt-3 border-t border-[var(--line)] pt-3">
+                        <EmbedCodePanel slug={e.slug} name={e.name} />
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
