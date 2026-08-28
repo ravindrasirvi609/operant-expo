@@ -163,6 +163,7 @@ export default function Exhibitions() {
                     <div className="flex gap-2">
                       <a className="rounded-md bg-[var(--accent)] px-3 py-2 text-xs font-semibold text-[var(--accent-ink)]" href={`/dashboard/exhibitions/${selected._id}/halls/${h._id}/map/setup?organizationId=${orgId}`}>Upload map</a>
                       <a className="rounded-md border border-[var(--line-strong)] px-3 py-2 text-xs font-semibold text-[var(--ink)]" href={`/dashboard/exhibitions/${selected._id}/halls/${h._id}/map?organizationId=${orgId}`}>View map</a>
+                      <a className="rounded-md border border-[var(--accent)] px-3 py-2 text-xs font-semibold text-[var(--accent-ink)]" href={`/dashboard/exhibitions/${selected._id}/halls/${h._id}/map/edit?organizationId=${orgId}`}>Edit map</a>
                     </div>
                   </div>
                 ))}
