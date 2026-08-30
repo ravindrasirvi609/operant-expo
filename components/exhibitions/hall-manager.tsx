@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { LayoutTemplate, Map, Warehouse } from "lucide-react";
+import { LayoutTemplate, Warehouse } from "lucide-react";
 import { toast } from "sonner";
 
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -83,15 +83,9 @@ export function HallManager({
     reset();
   });
 
-  // These three routes are replaced by a single wizard at .../halls/[hallId]/plan in the next
-  // phase; until then the editor is linked here so it is reachable at all — nothing in the UI
-  // pointed at it before.
-  const planHref = (hallId: string) =>
-    `/dashboard/exhibitions/${exhibitionId}/halls/${hallId}/map/edit?organizationId=${organizationId}`;
-  const viewHref = (hallId: string) =>
-    `/dashboard/exhibitions/${exhibitionId}/halls/${hallId}/map?organizationId=${organizationId}`;
-  const backgroundHref = (hallId: string) =>
-    `/dashboard/exhibitions/${exhibitionId}/halls/${hallId}/map/setup?organizationId=${organizationId}`;
+  // One destination for everything to do with a hall's plan. The organization comes from the shared
+  // provider, so no query parameter is needed — the old screens demanded one the UI never supplied.
+  const planHref = (hallId: string) => `/dashboard/exhibitions/${exhibitionId}/halls/${hallId}/plan`;
 
   return (
     <Card className="corner-marks mt-8">
@@ -145,23 +139,12 @@ export function HallManager({
                     {hall.width} × {hall.height} m{hall.level ? ` · level ${hall.level}` : ""}
                   </p>
                 </div>
-                <div className="flex flex-wrap gap-2">
-                  <Button asChild size="sm">
-                    <Link href={planHref(hall._id)}>
-                      <LayoutTemplate aria-hidden />
-                      Design floor plan
-                    </Link>
-                  </Button>
-                  <Button asChild size="sm" variant="outline">
-                    <Link href={viewHref(hall._id)}>
-                      <Map aria-hidden />
-                      View map
-                    </Link>
-                  </Button>
-                  <Button asChild size="sm" variant="ghost">
-                    <Link href={backgroundHref(hall._id)}>Background</Link>
-                  </Button>
-                </div>
+                <Button asChild size="sm">
+                  <Link href={planHref(hall._id)}>
+                    <LayoutTemplate aria-hidden />
+                    Design floor plan
+                  </Link>
+                </Button>
               </li>
             ))}
           </ul>

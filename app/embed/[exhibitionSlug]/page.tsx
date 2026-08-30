@@ -52,7 +52,7 @@ export default async function EmbedExhibitionPage({ params }: { params: Promise<
                       geometry: element.geometry,
                       visible: element.visible,
                       stallId: stall?._id?.toString(),
-                      status: stall?.status ?? element.status,
+                      status: stall?.status,
                     };
                   })}
                 />

@@ -55,7 +55,7 @@ export default async function PublicExhibitionPage({ params }: { params: Promise
                     geometry: element.geometry,
                     visible: element.visible,
                     stallId: stall?._id?.toString(),
-                    status: stall?.status ?? element.status,
+                    status: stall?.status,
                   };
                 })} />
               </div>

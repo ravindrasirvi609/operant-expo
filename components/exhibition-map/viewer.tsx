@@ -12,7 +12,22 @@ type Element = { _id: string; stallId?: string; type: string; label?: string; st
 // missing here while still being rendered on the map in the same red as BOOKED.
 const LEGEND = PUBLIC_LEGEND_STATUSES.map((status) => ({ status, label: statusLabel(status) }));
 
-export function MapViewer({ width, height, backgroundUrl, elements, bookingBasePath = "/exhibitions" }: { width: number; height: number; backgroundUrl?: string; elements: Element[]; bookingBasePath?: string }) {
+export function MapViewer({
+  width,
+  height,
+  backgroundUrl,
+  elements,
+  bookingBasePath = "/exhibitions",
+  interactive = true,
+}: {
+  width: number;
+  height: number;
+  backgroundUrl?: string;
+  elements: Element[];
+  bookingBasePath?: string;
+  /** False renders a read-only map — used for the organizer preview, which must not navigate. */
+  interactive?: boolean;
+}) {
   const [zoom, setZoom] = useState(1);
   const [selected, setSelected] = useState<string | null>(null);
   const pan = useRef<{ startX: number; startY: number; scrollLeft: number; scrollTop: number } | null>(null);
@@ -20,9 +35,21 @@ export function MapViewer({ width, height, backgroundUrl, elements, bookingBaseP
   const router = useRouter();
   const visible = useMemo(() => elements.filter((element) => element.visible), [elements]);
 
+  /** A rectangle is only clickable if it is a stall, has inventory behind it, and is free. */
+  function isBookable(element: Element) {
+    return (
+      interactive &&
+      element.type === "STALL" &&
+      Boolean(element.stallId) &&
+      element.status !== "BOOKED" &&
+      element.status !== "BLOCKED" &&
+      element.status !== "PENDING"
+    );
+  }
+
   function selectElement(element: Element) {
     setSelected(element._id);
-    if (element.stallId && element.status !== "BOOKED" && element.status !== "BLOCKED") {
+    if (isBookable(element)) {
       // The slug sits at path segment 2 under both /exhibitions/{slug} and /embed/{slug} — only
       // the base path differs, which callers control via bookingBasePath so the widget never
       // navigates a visitor out of the iframe and onto the full-chrome public page.
@@ -83,24 +110,52 @@ export function MapViewer({ width, height, backgroundUrl, elements, bookingBaseP
           style={{ width, height, transform: `scale(${zoom})`, backgroundImage: backgroundUrl ? `url(${backgroundUrl})` : undefined, backgroundSize: "100% 100%" }}
         >
           {visible.map((element) => {
+            const isStall = element.type === "STALL";
             const color = statusColor(element.status ?? "AVAILABLE");
+            const bookable = isBookable(element);
+            const shared = {
+              left: element.geometry.x,
+              top: element.geometry.y,
+              width: element.geometry.width,
+              height: element.geometry.height,
+              transform: `rotate(${element.geometry.rotation ?? 0}deg)`,
+              backgroundColor: isStall
+                ? `color-mix(in srgb, ${color} 30%, transparent)`
+                : "color-mix(in srgb, var(--ink-faint) 15%, transparent)",
+              borderColor: isStall ? color : "var(--line-strong)",
+              color: "var(--ink)",
+            } as const;
+
+            // Entrances, stages and walkways are labels on a drawing, not controls. They used to
+            // render as focusable buttons that did nothing when clicked, which put every one of
+            // them in the keyboard tab order ahead of the stalls a visitor came to book.
+            if (!bookable) {
+              return (
+                <div
+                  key={element._id}
+                  aria-hidden
+                  className="absolute overflow-hidden rounded border font-mono text-[10px] font-semibold"
+                  style={shared}
+                  title={
+                    isStall
+                      ? `${element.label ?? "Stall"} — ${statusLabel(element.status ?? "AVAILABLE")}`
+                      : (element.label ?? element.type)
+                  }
+                >
+                  <span className="flex h-full w-full items-center justify-center px-1 text-center">
+                    {element.label ?? element.type}
+                  </span>
+                </div>
+              );
+            }
+
             return (
               <button
                 key={element._id}
-                aria-label={element.label ?? element.type}
+                aria-label={`Reserve stall ${element.label ?? ""}`.trim()}
                 onClick={() => selectElement(element)}
-                disabled={element.status === "BOOKED" || element.status === "BLOCKED"}
-                className={`absolute overflow-hidden rounded border font-mono text-[10px] font-semibold transition focus:outline-none focus:ring-2 focus:ring-[var(--brand)] ${selected === element._id ? "z-20 ring-2 ring-[var(--brand)]" : ""}`}
-                style={{
-                  left: element.geometry.x,
-                  top: element.geometry.y,
-                  width: element.geometry.width,
-                  height: element.geometry.height,
-                  transform: `rotate(${element.geometry.rotation ?? 0}deg)`,
-                  backgroundColor: element.type === "STALL" ? `color-mix(in srgb, ${color} 30%, transparent)` : "color-mix(in srgb, var(--ink-faint) 15%, transparent)",
-                  borderColor: element.type === "STALL" ? color : "var(--line-strong)",
-                  color: "var(--ink)",
-                }}
+                className={`absolute overflow-hidden rounded border font-mono text-[10px] font-semibold transition hover:brightness-95 ${selected === element._id ? "z-20 ring-2 ring-[var(--brand)]" : ""}`}
+                style={shared}
               >
                 {element.label ?? element.type}
               </button>

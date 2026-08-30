@@ -14,6 +14,10 @@ const envSchema = z.object({
   CLOUDFLARE_R2_BUCKET_NAME: z.string().min(1).optional(),
   NEXT_PUBLIC_CLOUDFLARE_R2_PUBLIC_URL: z.string().url().optional(),
 
+  // Where the local asset driver writes when R2 is not configured. Deliberately not `public/`,
+  // which is not writable at runtime in a production build.
+  ASSET_STORAGE_DIR: z.string().min(1).default(".uploads"),
+
   PAYMENT_WEBHOOK_SECRET: z.string().min(16).optional(),
   JOB_SECRET: z.string().min(16).optional(),
 });
@@ -29,6 +33,7 @@ export const env = envSchema.parse({
   CLOUDFLARE_R2_SECRET_ACCESS_KEY: process.env.CLOUDFLARE_R2_SECRET_ACCESS_KEY,
   CLOUDFLARE_R2_BUCKET_NAME: process.env.CLOUDFLARE_R2_BUCKET_NAME,
   NEXT_PUBLIC_CLOUDFLARE_R2_PUBLIC_URL: process.env.NEXT_PUBLIC_CLOUDFLARE_R2_PUBLIC_URL,
+  ASSET_STORAGE_DIR: process.env.ASSET_STORAGE_DIR,
   PAYMENT_WEBHOOK_SECRET: process.env.PAYMENT_WEBHOOK_SECRET,
   JOB_SECRET: process.env.JOB_SECRET,
 });

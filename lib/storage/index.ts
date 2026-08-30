@@ -1,39 +1,60 @@
 import { createHash } from "node:crypto";
-import { PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
 
-const allowedTypes = new Set(["image/png", "image/jpeg", "image/webp", "image/svg+xml"]);
-const maxBytes = 15 * 1024 * 1024;
-let client: S3Client | undefined;
+import { localAssetDriver, assetStorageDirectory } from "@/lib/storage/local";
+import { createR2Driver, readR2Config } from "@/lib/storage/r2";
+import {
+  ALLOWED_ASSET_TYPES,
+  AssetStorageError,
+  MAX_ASSET_BYTES,
+  buildAssetKey,
+  type AssetDriver,
+  type AssetDriverName,
+  type StoredAsset,
+} from "@/lib/storage/types";
 
-function getR2Config() {
-  const accountId = process.env.CLOUDFLARE_ACCOUNT_ID;
-  const accessKeyId = process.env.CLOUDFLARE_R2_ACCESS_KEY_ID;
-  const secretAccessKey = process.env.CLOUDFLARE_R2_SECRET_ACCESS_KEY;
-  const bucket = process.env.CLOUDFLARE_R2_BUCKET_NAME;
-  if (!accountId || !accessKeyId || !secretAccessKey || !bucket) throw new Error("R2 storage is not configured");
-  return { bucket, publicBaseUrl: process.env.NEXT_PUBLIC_CLOUDFLARE_R2_PUBLIC_URL?.replace(/\/$/, "") };
+export { AssetStorageError } from "@/lib/storage/types";
+export { readLocalAsset } from "@/lib/storage/local";
+export type { StoredAsset } from "@/lib/storage/types";
+
+/**
+ * Picks the storage driver for this deployment.
+ *
+ * R2 wins when fully configured; otherwise files go to the local filesystem. There is deliberately
+ * no third "unconfigured" outcome any more: requiring object storage for a background image is
+ * what made floor-plan creation impossible on a workspace that had never set up R2, because the
+ * plan form demanded an upload it could never complete.
+ */
+function resolveDriver(): AssetDriver {
+  const r2 = readR2Config();
+  return r2 ? createR2Driver(r2) : localAssetDriver;
 }
 
-function getClient() {
-  if (client) return client;
-  const accountId = process.env.CLOUDFLARE_ACCOUNT_ID;
-  const accessKeyId = process.env.CLOUDFLARE_R2_ACCESS_KEY_ID;
-  const secretAccessKey = process.env.CLOUDFLARE_R2_SECRET_ACCESS_KEY;
-  if (!accountId || !accessKeyId || !secretAccessKey) throw new Error("R2 credentials are not configured");
-  client = new S3Client({ region: "auto", endpoint: `https://${accountId}.r2.cloudflarestorage.com`, credentials: { accessKeyId, secretAccessKey } });
-  return client;
+export function assetStorageStatus(): { driver: AssetDriverName; detail: string } {
+  const r2 = readR2Config();
+  return r2
+    ? { driver: "r2", detail: `Cloudflare R2 bucket ${r2.bucket}` }
+    : { driver: "local", detail: `local directory ${assetStorageDirectory()}` };
 }
 
-export async function saveAsset(file: File, prefix = "assets") {
-  const config = getR2Config();
-  if (!allowedTypes.has(file.type)) throw new Error("Unsupported asset type");
-  if (file.size > maxBytes) throw new Error("Asset exceeds the 15 MB limit");
+export async function saveAsset(file: File, prefix = "assets"): Promise<StoredAsset> {
+  if (!ALLOWED_ASSET_TYPES.has(file.type)) {
+    throw new AssetStorageError(
+      "That file type is not supported. Use a PNG, JPEG, WebP or SVG image.",
+    );
+  }
+  if (file.size > MAX_ASSET_BYTES) {
+    throw new AssetStorageError("That image is larger than the 15 MB limit.");
+  }
+  if (file.size === 0) {
+    throw new AssetStorageError("That file is empty.");
+  }
+
   const bytes = Buffer.from(await file.arrayBuffer());
   const checksum = createHash("sha256").update(bytes).digest("hex");
-  const extension = file.name.split(".").pop()?.toLowerCase() || "bin";
-  const key = `${checksum}.${extension}`;
-  const objectKey = `${prefix}/${key}`;
-  await getClient().send(new PutObjectCommand({ Bucket: config.bucket, Key: objectKey, Body: bytes, ContentType: file.type, Metadata: { checksum, originalname: file.name } }));
-  if (!config.publicBaseUrl) throw new Error("R2_PUBLIC_BASE_URL is not configured");
-  return { key: objectKey, checksum, size: file.size, contentType: file.type, url: `${config.publicBaseUrl}/${objectKey}` };
+  const key = buildAssetKey(prefix, checksum, file.type);
+
+  const driver = resolveDriver();
+  const { url } = await driver.save({ key, bytes, contentType: file.type });
+
+  return { key, checksum, size: file.size, contentType: file.type, url };
 }

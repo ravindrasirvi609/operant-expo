@@ -395,7 +395,7 @@ export default function StallsInventory() {
 
   const planHref =
     exhibitionId && hallId
-      ? `/dashboard/exhibitions/${exhibitionId}/halls/${hallId}/map/edit?organizationId=${organizationId}`
+      ? `/dashboard/exhibitions/${exhibitionId}/halls/${hallId}/plan`
       : "";
 
   return (
@@ -496,7 +496,7 @@ export default function StallsInventory() {
                     <Button asChild size="sm">
                       <Link href={planHref}>
                         <LayoutTemplate aria-hidden />
-                        Open floor-plan editor
+                        Open the floor-plan wizard
                       </Link>
                     </Button>
                   </span>
