@@ -17,10 +17,10 @@ export function PublishMapButton({ organizationId, floorPlanId }: { organization
   }
   return (
     <div className="flex items-center gap-3">
-      <button onClick={() => void publish()} disabled={state === "saving" || state === "done"} className="rounded-md bg-[var(--accent)] px-4 py-2.5 text-sm font-semibold text-[var(--accent-ink)] disabled:opacity-60">
+      <button onClick={() => void publish()} disabled={state === "saving" || state === "done"} className="rounded-md bg-[var(--brand)] px-4 py-2.5 text-sm font-semibold text-[var(--brand-ink)] disabled:opacity-60">
         {state === "saving" ? "Publishing…" : state === "done" ? "Published ✓" : "Publish map"}
       </button>
-      {message && <span role={state === "error" ? "alert" : "status"} className={`max-w-xs text-xs ${state === "error" ? "text-[var(--booked)]" : "text-[var(--available)]"}`}>{message}</span>}
+      {message && <span role={state === "error" ? "alert" : "status"} className={`max-w-xs text-xs ${state === "error" ? "text-[var(--status-booked)]" : "text-[var(--status-available)]"}`}>{message}</span>}
     </div>
   );
 }

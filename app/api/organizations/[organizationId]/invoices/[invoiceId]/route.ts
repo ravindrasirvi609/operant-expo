@@ -1,13 +1,15 @@
 import { NextResponse } from "next/server";
 import { ObjectId } from "mongodb";
-import { requireOrganizationPermission } from "@/lib/auth/authorization";
+import { requireApiPermission } from "@/lib/auth/authorization";
 import { getDatabase } from "@/lib/db/client";
 import { createInvoicePdf } from "@/lib/invoices/pdf";
 import type { BookingDocument } from "@/models/booking";
 import type { InvoiceDocument } from "@/models/commercial";
 
 export async function GET(_: Request, { params }: { params: Promise<{ organizationId: string; invoiceId: string }> }) {
-  const { organizationId, invoiceId } = await params; await requireOrganizationPermission(organizationId, "finance:view");
+  const { organizationId, invoiceId } = await params;
+  const auth = await requireApiPermission(organizationId, "finance:view");
+  if (!auth.ok) return auth.response;
   if (!ObjectId.isValid(invoiceId)) return NextResponse.json({ error: "Invalid invoice" }, { status: 400 });
   const database = await getDatabase(); const invoice = await database.collection<InvoiceDocument>("invoices").findOne({ _id: new ObjectId(invoiceId), organizationId: new ObjectId(organizationId) });
   if (!invoice) return NextResponse.json({ error: "Invoice not found" }, { status: 404 }); const booking = await database.collection<BookingDocument>("bookings").findOne({ _id: invoice.bookingId });

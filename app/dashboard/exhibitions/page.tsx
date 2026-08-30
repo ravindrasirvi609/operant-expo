@@ -103,8 +103,8 @@ export default function Exhibitions() {
           {orgs.map((o) => <option key={o._id} value={o._id}>{o.name}</option>)}
         </select>
       </div>
-      {error && <p role="alert" className="mt-5 rounded-md border border-[var(--booked)] bg-[color-mix(in_srgb,var(--booked)_10%,transparent)] p-4 text-sm text-[var(--booked)]">{error}</p>}
-      {notice && <p role="status" className="mt-5 rounded-md border border-[var(--available)] bg-[color-mix(in_srgb,var(--available)_10%,transparent)] p-4 text-sm text-[var(--available)]">{notice}</p>}
+      {error && <p role="alert" className="mt-5 rounded-md border border-[var(--status-booked)] bg-[color-mix(in_srgb,var(--status-booked)_10%,transparent)] p-4 text-sm text-[var(--status-booked)]">{error}</p>}
+      {notice && <p role="status" className="mt-5 rounded-md border border-[var(--status-available)] bg-[color-mix(in_srgb,var(--status-available)_10%,transparent)] p-4 text-sm text-[var(--status-available)]">{notice}</p>}
       {loading ? (
         <p className="mt-8 text-[var(--ink-soft)]">Loading exhibitions…</p>
       ) : (
@@ -122,7 +122,7 @@ export default function Exhibitions() {
             ) : (
               <div className="space-y-3">
                 {exhibitions.map((e) => (
-                  <div key={e._id} className={`corner-marks rounded-2xl border bg-[var(--paper-raised)] p-5 shadow-sm ${selected?._id === e._id ? "border-[var(--accent)]" : "border-[var(--line)]"}`} data-active={selected?._id === e._id}>
+                  <div key={e._id} className={`corner-marks rounded-2xl border bg-[var(--paper-raised)] p-5 shadow-sm ${selected?._id === e._id ? "border-[var(--brand)]" : "border-[var(--line)]"}`} data-active={selected?._id === e._id}>
                     <button onClick={() => void select(e)} className="w-full text-left">
                       <div className="flex items-start justify-between gap-4">
                         <div>
@@ -134,9 +134,9 @@ export default function Exhibitions() {
                       <p className="mt-4 font-mono text-sm text-[var(--ink-soft)]">{new Date(e.startDate).toLocaleDateString()} – {new Date(e.endDate).toLocaleDateString()}</p>
                     </button>
                     <div className="mt-5 flex flex-wrap gap-2 border-t border-[var(--line)] pt-4">
-                      {e.lifecycle === "DRAFT" && <button disabled={saving} onClick={() => void lifecycle(e, "PUBLISHED")} className="rounded-md bg-[var(--accent)] px-3 py-2 text-xs font-semibold text-[var(--accent-ink)] disabled:opacity-50">Publish exhibition</button>}
-                      {e.lifecycle === "PUBLISHED" && <button disabled={saving} onClick={() => void lifecycle(e, "BOOKING_OPEN")} className="rounded-md bg-[var(--available)] px-3 py-2 text-xs font-semibold text-white disabled:opacity-50">Open booking</button>}
-                      {e.lifecycle === "BOOKING_OPEN" && <button disabled={saving} onClick={() => void lifecycle(e, "BOOKING_CLOSED")} className="rounded-md bg-[var(--held)] px-3 py-2 text-xs font-semibold text-[var(--accent-ink)] disabled:opacity-50">Close booking</button>}
+                      {e.lifecycle === "DRAFT" && <button disabled={saving} onClick={() => void lifecycle(e, "PUBLISHED")} className="rounded-md bg-[var(--brand)] px-3 py-2 text-xs font-semibold text-[var(--brand-ink)] disabled:opacity-50">Publish exhibition</button>}
+                      {e.lifecycle === "PUBLISHED" && <button disabled={saving} onClick={() => void lifecycle(e, "BOOKING_OPEN")} className="rounded-md bg-[var(--status-available)] px-3 py-2 text-xs font-semibold text-white disabled:opacity-50">Open booking</button>}
+                      {e.lifecycle === "BOOKING_OPEN" && <button disabled={saving} onClick={() => void lifecycle(e, "BOOKING_CLOSED")} className="rounded-md bg-[var(--status-held)] px-3 py-2 text-xs font-semibold text-[var(--brand-ink)] disabled:opacity-50">Close booking</button>}
                       {["PUBLISHED", "BOOKING_OPEN", "BOOKING_CLOSED"].includes(e.lifecycle) && <a href={`/exhibitions/${e.slug}`} target="_blank" className="rounded-md border border-[var(--line-strong)] px-3 py-2 text-xs font-semibold text-[var(--ink)]">View public page ↗</a>}
                     </div>
                     {["PUBLISHED", "BOOKING_OPEN", "BOOKING_CLOSED"].includes(e.lifecycle) && (
@@ -152,7 +152,7 @@ export default function Exhibitions() {
               <div className="corner-marks mt-8 rounded-2xl border border-[var(--line)] bg-[var(--paper-raised)] p-6 shadow-sm">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="font-mono text-xs uppercase tracking-widest text-[var(--accent-ink)] dark:text-[var(--accent)]">Hall setup</p>
+                    <p className="font-mono text-xs uppercase tracking-widest text-[var(--brand-quiet)]">Hall setup</p>
                     <h2 className="mt-1 font-display text-xl font-semibold text-[var(--ink)]">{selected.name}</h2>
                   </div>
                   <span className="text-sm text-[var(--ink-soft)]">{halls.length} halls</span>
@@ -161,7 +161,7 @@ export default function Exhibitions() {
                   <div key={h._id} className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[var(--line)] p-4">
                     <span className="text-sm font-medium text-[var(--ink)]">{h.name} <span className="font-mono text-[var(--ink-faint)]">· {h.code}</span></span>
                     <div className="flex gap-2">
-                      <a className="rounded-md bg-[var(--accent)] px-3 py-2 text-xs font-semibold text-[var(--accent-ink)]" href={`/dashboard/exhibitions/${selected._id}/halls/${h._id}/map/setup?organizationId=${orgId}`}>Upload map</a>
+                      <a className="rounded-md bg-[var(--brand)] px-3 py-2 text-xs font-semibold text-[var(--brand-ink)]" href={`/dashboard/exhibitions/${selected._id}/halls/${h._id}/map/setup?organizationId=${orgId}`}>Upload map</a>
                       <a className="rounded-md border border-[var(--line-strong)] px-3 py-2 text-xs font-semibold text-[var(--ink)]" href={`/dashboard/exhibitions/${selected._id}/halls/${h._id}/map?organizationId=${orgId}`}>View map</a>
                     </div>
                   </div>
@@ -199,7 +199,7 @@ function Form({ title, subtitle, fields, onSubmit, button }: { title: string; su
           <input key={f} name={f} required={!["city", "country", "shortDescription"].includes(f)} type={f.includes("Date") ? "date" : "text"} defaultValue={f === "timezone" ? "Asia/Kolkata" : undefined} placeholder={f.replace(/([A-Z])/g, " $1")} className="w-full rounded-md border border-[var(--line-strong)] bg-transparent p-3" />
         ),
       )}
-      <button className="w-full rounded-md bg-[var(--accent)] p-3 text-sm font-semibold text-[var(--accent-ink)]">{button}</button>
+      <button className="w-full rounded-md bg-[var(--brand)] p-3 text-sm font-semibold text-[var(--brand-ink)]">{button}</button>
     </form>
   );
 }

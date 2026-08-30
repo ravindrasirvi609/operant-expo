@@ -86,7 +86,7 @@ export function MapViewer({ width, height, backgroundUrl, elements, bookingBaseP
                 aria-label={element.label ?? element.type}
                 onClick={() => selectElement(element)}
                 disabled={element.status === "BOOKED" || element.status === "BLOCKED"}
-                className={`absolute overflow-hidden rounded border font-mono text-[10px] font-semibold transition focus:outline-none focus:ring-2 focus:ring-[var(--accent)] ${selected === element._id ? "z-20 ring-2 ring-[var(--accent)]" : ""}`}
+                className={`absolute overflow-hidden rounded border font-mono text-[10px] font-semibold transition focus:outline-none focus:ring-2 focus:ring-[var(--brand)] ${selected === element._id ? "z-20 ring-2 ring-[var(--brand)]" : ""}`}
                 style={{
                   left: element.geometry.x,
                   top: element.geometry.y,

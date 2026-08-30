@@ -47,7 +47,7 @@ export function EmbedCodePanel({ slug, name }: { slug: string; name: string }) {
         <div className="mt-3 rounded-lg border border-[var(--line)] bg-[var(--paper)] p-3">
           <div className="flex items-center justify-between">
             <p className="text-xs text-[var(--ink-soft)]">Paste this into your website where you want the booking widget to appear.</p>
-            <button onClick={() => void copy()} className="rounded-md bg-[var(--accent)] px-2.5 py-1 text-xs font-semibold text-[var(--accent-ink)]">
+            <button onClick={() => void copy()} className="rounded-md bg-[var(--brand)] px-2.5 py-1 text-xs font-semibold text-[var(--brand-ink)]">
               {copied ? "Copied ✓" : "Copy"}
             </button>
           </div>

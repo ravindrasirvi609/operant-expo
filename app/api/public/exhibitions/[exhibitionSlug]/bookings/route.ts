@@ -13,10 +13,11 @@ import type { BookingDocument, ExhibitorDocument, ReservationHoldDocument } from
 import type { ExhibitionDocument } from "@/models/exhibition";
 import type { InvoiceDocument, PaymentDocument } from "@/models/commercial";
 import type { StallDocument } from "@/models/stall";
+import { badRequest } from "@/lib/http/responses";
 
 export async function POST(request: Request, { params }: { params: Promise<{ exhibitionSlug: string }> }) {
   const { exhibitionSlug } = await params; const parsed = bookingSchema.safeParse(await readBody(request));
-  if (!parsed.success) return NextResponse.json({ error: "Invalid booking details", details: parsed.error.flatten() }, { status: 400 });
+  if (!parsed.success) return badRequest(parsed.error, "Check your booking details.");
   if (!ObjectId.isValid(parsed.data.stallId)) return NextResponse.json({ error: "Invalid stall" }, { status: 400 });
   const idempotencyKey = request.headers.get("idempotency-key")?.trim(); const database = await getDatabase();
   if (idempotencyKey) { const existing = await database.collection<BookingDocument>("bookings").findOne({ idempotencyKey }); if (existing) return NextResponse.json({ booking: { id: existing._id!.toString(), bookingNumber: existing.bookingNumber, status: existing.status, total: existing.commercialSnapshot.total, currency: existing.commercialSnapshot.currency }, idempotentReplay: true }); }

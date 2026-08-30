@@ -241,12 +241,12 @@ export default function Editor({ params, searchParams }: { params: Promise<{ exh
           <label className="flex items-center gap-2 rounded-md border border-[var(--line-strong)] px-3 py-2 text-sm text-[var(--ink)]">
             <input type="checkbox" checked={snap} onChange={(event) => setSnap(event.target.checked)} /> Snap to grid
           </label>
-          <button onClick={() => void deleteSelected()} disabled={selectedIds.length === 0} className="rounded-md border border-[var(--booked)] px-3 py-2 text-sm font-medium text-[var(--booked)] disabled:opacity-40">Delete</button>
-          <button onClick={() => void addStall()} className="rounded-md bg-[var(--accent)] px-4 py-2.5 text-sm font-semibold text-[var(--accent-ink)]">+ Add stall</button>
+          <button onClick={() => void deleteSelected()} disabled={selectedIds.length === 0} className="rounded-md border border-[var(--status-booked)] px-3 py-2 text-sm font-medium text-[var(--status-booked)] disabled:opacity-40">Delete</button>
+          <button onClick={() => void addStall()} className="rounded-md bg-[var(--brand)] px-4 py-2.5 text-sm font-semibold text-[var(--brand-ink)]">+ Add stall</button>
         </div>
       </div>
-      {error && <p role="alert" className="mt-4 rounded-md border border-[var(--booked)] bg-[color-mix(in_srgb,var(--booked)_10%,transparent)] p-3 text-sm text-[var(--booked)]">{error}</p>}
-      {saving && <p className="mt-2 font-mono text-xs text-[var(--accent-ink)] dark:text-[var(--accent)]">Saving…</p>}
+      {error && <p role="alert" className="mt-4 rounded-md border border-[var(--status-booked)] bg-[color-mix(in_srgb,var(--status-booked)_10%,transparent)] p-3 text-sm text-[var(--status-booked)]">{error}</p>}
+      {saving && <p className="mt-2 font-mono text-xs text-[var(--brand-quiet)]">Saving…</p>}
 
       <div className="mt-6 grid gap-6 lg:grid-cols-[1fr_280px]">
         <div className="overflow-auto rounded-xl border border-[var(--line)] bg-[var(--paper)] p-6">
@@ -270,15 +270,15 @@ export default function Editor({ params, searchParams }: { params: Promise<{ exh
                   onPointerMove={(e) => move(e, element)}
                   onPointerUp={(e) => end(e)}
                   onClick={(e) => selectElement(e, element._id)}
-                  className={`absolute select-none rounded border text-xs font-semibold font-mono ${isSelected ? "z-10 ring-2 ring-[var(--accent)]" : "border-[var(--line-strong)]"} ${element.locked ? "cursor-not-allowed" : "cursor-move"}`}
+                  className={`absolute select-none rounded border text-xs font-semibold font-mono ${isSelected ? "z-10 ring-2 ring-[var(--brand)]" : "border-[var(--line-strong)]"} ${element.locked ? "cursor-not-allowed" : "cursor-move"}`}
                   style={{
                     left: element.geometry.x,
                     top: element.geometry.y,
                     width: element.geometry.width,
                     height: element.geometry.height,
                     transform: element.geometry.rotation ? `rotate(${element.geometry.rotation}deg)` : undefined,
-                    background: element.type === "STALL" ? "color-mix(in srgb, var(--available) 22%, transparent)" : "color-mix(in srgb, var(--blocked) 18%, transparent)",
-                    borderColor: isSelected ? "var(--accent)" : undefined,
+                    background: element.type === "STALL" ? "color-mix(in srgb, var(--status-available) 22%, transparent)" : "color-mix(in srgb, var(--status-blocked) 18%, transparent)",
+                    borderColor: isSelected ? "var(--brand)" : undefined,
                   }}
                 >
                   <span className="flex h-full w-full items-center justify-center px-1 text-center text-[var(--ink)]">{element.label ?? element.type}</span>
@@ -288,13 +288,13 @@ export default function Editor({ params, searchParams }: { params: Promise<{ exh
                         onPointerDown={(e) => begin(e, element, "resize")}
                         onPointerMove={(e) => move(e, element)}
                         onPointerUp={(e) => end(e)}
-                        className="absolute bottom-0 right-0 h-3 w-3 cursor-se-resize rounded-tl bg-[var(--accent)]"
+                        className="absolute bottom-0 right-0 h-3 w-3 cursor-se-resize rounded-tl bg-[var(--brand)]"
                       />
                       <span
                         onPointerDown={(e) => begin(e, element, "rotate")}
                         onPointerMove={(e) => move(e, element)}
                         onPointerUp={(e) => end(e)}
-                        className="absolute -top-4 left-1/2 h-3 w-3 -translate-x-1/2 cursor-grab rounded-full bg-[var(--accent)]"
+                        className="absolute -top-4 left-1/2 h-3 w-3 -translate-x-1/2 cursor-grab rounded-full bg-[var(--brand)]"
                         title="Drag to rotate · hold Shift for free rotation"
                       />
                     </>

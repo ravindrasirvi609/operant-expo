@@ -1,32 +1,43 @@
-const STATUS_COLOR_VAR: Record<string, string> = {
-  AVAILABLE: "var(--available)",
-  HELD: "var(--held)",
-  BOOKED: "var(--booked)",
-  BLOCKED: "var(--blocked)",
-  PENDING: "var(--pending)",
-  PAYMENT_PENDING: "var(--pending)",
-  CONFIRMED: "var(--available)",
-  CANCELLED: "var(--blocked)",
-  EXPIRED: "var(--blocked)",
-  REFUND_PENDING: "var(--held)",
-  REFUNDED: "var(--blocked)",
-};
+import { cn } from "@/lib/utils";
+import { statusColor, statusInk, statusLabel } from "@/lib/ui/status";
 
-/** Single source of truth for stall/booking/hold status colors — used by StatusBadge itself,
- * the map viewer, the map editor, and the public legend, so a color always means the same thing. */
-export function statusColor(status: string) {
-  return STATUS_COLOR_VAR[status] ?? "var(--ink-faint)";
-}
+/**
+ * Status pill used across the dashboard, the map legend and the public stall list.
+ *
+ * The dot carries the fill colour and the text carries the contrast-corrected ink colour, so a
+ * label like "Payment pending" stays legible on paper instead of being rendered in the same
+ * light amber as its own marker.
+ */
+export function StatusBadge({
+  status,
+  label,
+  className,
+}: {
+  status: string;
+  label?: string;
+  className?: string;
+}) {
+  const fill = statusColor(status);
+  const ink = statusInk(status);
 
-export function StatusBadge({ status, label }: { status: string; label?: string }) {
-  const color = statusColor(status);
   return (
     <span
-      className="inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-medium tabular"
-      style={{ borderColor: color, color, backgroundColor: `color-mix(in srgb, ${color} 12%, transparent)` }}
+      data-slot="status-badge"
+      className={cn(
+        "inline-flex w-fit items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-medium whitespace-nowrap",
+        className,
+      )}
+      style={{
+        borderColor: fill,
+        color: ink,
+        backgroundColor: `color-mix(in srgb, ${fill} 12%, transparent)`,
+      }}
     >
-      <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: color }} aria-hidden />
-      {(label ?? status).replace(/_/g, " ")}
+      <span className="size-1.5 rounded-full" style={{ backgroundColor: fill }} aria-hidden />
+      {label ?? statusLabel(status)}
     </span>
   );
 }
+
+/** Re-exported so existing imports of `statusColor` from this module keep working. */
+export { statusColor, statusInk, statusLabel } from "@/lib/ui/status";

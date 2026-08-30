@@ -1,13 +1,14 @@
 import { NextResponse } from "next/server";
 import { ObjectId } from "mongodb";
 
-import { requireOrganizationPermission } from "@/lib/auth/authorization";
+import { requireApiPermission } from "@/lib/auth/authorization";
 import { getDatabase } from "@/lib/db/client";
 import type { ExhibitionDocument } from "@/models/exhibition";
 
 export async function POST(request: Request, { params }: { params: Promise<{ organizationId: string; exhibitionId: string }> }) {
   const { organizationId, exhibitionId } = await params;
-  await requireOrganizationPermission(organizationId, "exhibition:manage");
+  const auth = await requireApiPermission(organizationId, "exhibition:manage");
+  if (!auth.ok) return auth.response;
   if (![organizationId, exhibitionId].every(ObjectId.isValid)) return NextResponse.json({ error: "Invalid exhibition" }, { status: 400 });
   const body = await request.json().catch(() => ({})) as { lifecycle?: ExhibitionDocument["lifecycle"] };
   if (!body.lifecycle || !["PUBLISHED", "BOOKING_OPEN", "BOOKING_CLOSED", "COMPLETED", "ARCHIVED"].includes(body.lifecycle)) return NextResponse.json({ error: "Invalid lifecycle transition" }, { status: 400 });

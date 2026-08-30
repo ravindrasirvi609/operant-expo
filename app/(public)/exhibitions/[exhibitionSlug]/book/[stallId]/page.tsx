@@ -65,32 +65,32 @@ export default function BookingPage({ params }: { params: Promise<{ exhibitionSl
       <h1 className="mt-2 font-display text-3xl font-semibold text-[var(--ink)]">Exhibitor booking</h1>
 
       {expiresAt && !message && (
-        <div className="mt-4 flex items-center justify-between rounded-md border border-[var(--held)] bg-[color-mix(in_srgb,var(--held)_10%,transparent)] px-4 py-3">
+        <div className="mt-4 flex items-center justify-between rounded-md border border-[var(--status-held)] bg-[color-mix(in_srgb,var(--status-held)_10%,transparent)] px-4 py-3">
           <span className="text-sm text-[var(--ink)]">Stall held for</span>
-          <span className="font-mono text-lg font-semibold tabular text-[var(--held)]">{Math.floor(seconds / 60)}:{String(seconds % 60).padStart(2, "0")}</span>
+          <span className="font-mono text-lg font-semibold tabular text-[var(--status-held)]">{Math.floor(seconds / 60)}:{String(seconds % 60).padStart(2, "0")}</span>
         </div>
       )}
-      {error && <p role="alert" className="mt-3 rounded-md border border-[var(--booked)] bg-[color-mix(in_srgb,var(--booked)_10%,transparent)] p-3 text-sm text-[var(--booked)]">{error}</p>}
+      {error && <p role="alert" className="mt-3 rounded-md border border-[var(--status-booked)] bg-[color-mix(in_srgb,var(--status-booked)_10%,transparent)] p-3 text-sm text-[var(--status-booked)]">{error}</p>}
 
       {message ? (
-        <p className="mt-6 rounded-md border border-[var(--available)] bg-[color-mix(in_srgb,var(--available)_10%,transparent)] p-4 text-[var(--available)]">{message}</p>
+        <p className="mt-6 rounded-md border border-[var(--status-available)] bg-[color-mix(in_srgb,var(--status-available)_10%,transparent)] p-4 text-[var(--status-available)]">{message}</p>
       ) : (
         <form onSubmit={submit} className="mt-6 space-y-3">
           <div>
             <input name="companyName" required placeholder="Company name" className="w-full rounded-md border border-[var(--line-strong)] bg-transparent p-3" />
-            {fieldErrors.companyName && <p className="mt-1 text-xs text-[var(--booked)]">{fieldErrors.companyName}</p>}
+            {fieldErrors.companyName && <p className="mt-1 text-xs text-[var(--status-booked)]">{fieldErrors.companyName}</p>}
           </div>
           <div>
             <input name="contactPerson" required placeholder="Contact person" className="w-full rounded-md border border-[var(--line-strong)] bg-transparent p-3" />
-            {fieldErrors.contactPerson && <p className="mt-1 text-xs text-[var(--booked)]">{fieldErrors.contactPerson}</p>}
+            {fieldErrors.contactPerson && <p className="mt-1 text-xs text-[var(--status-booked)]">{fieldErrors.contactPerson}</p>}
           </div>
           <div>
             <input name="email" required type="email" placeholder="Email" className="w-full rounded-md border border-[var(--line-strong)] bg-transparent p-3" />
-            {fieldErrors.email && <p className="mt-1 text-xs text-[var(--booked)]">{fieldErrors.email}</p>}
+            {fieldErrors.email && <p className="mt-1 text-xs text-[var(--status-booked)]">{fieldErrors.email}</p>}
           </div>
           <input name="phone" placeholder="Phone" className="w-full rounded-md border border-[var(--line-strong)] bg-transparent p-3" />
           <textarea name="address" placeholder="Address" className="w-full rounded-md border border-[var(--line-strong)] bg-transparent p-3" />
-          <button disabled={!expiresAt || seconds === 0 || submitting} className="w-full rounded-md bg-[var(--accent)] p-3 font-medium text-[var(--accent-ink)] disabled:opacity-50">
+          <button disabled={!expiresAt || seconds === 0 || submitting} className="w-full rounded-md bg-[var(--brand)] p-3 font-medium text-[var(--brand-ink)] disabled:opacity-50">
             {submitting ? "Submitting…" : "Submit booking"}
           </button>
         </form>

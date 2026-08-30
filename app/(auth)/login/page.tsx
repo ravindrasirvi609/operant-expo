@@ -1,53 +1,78 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { toast } from "sonner";
 
-import { parseJsonResponse } from "@/lib/http/client";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { Field } from "@/components/ui/field";
+import { Input } from "@/components/ui/input";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { credentialsSchema } from "@/lib/auth/input";
+import { apiRequest } from "@/lib/http/client";
+import { applyApiErrors, useZodForm } from "@/lib/ui/forms";
 
 export default function LoginPage() {
   const router = useRouter();
-  const [error, setError] = useState("");
-  const [saving, setSaving] = useState(false);
+  const form = useZodForm(credentialsSchema, { email: "", password: "" });
+  const {
+    register,
+    handleSubmit,
+    setError,
+    clearErrors,
+    formState: { errors, isSubmitting },
+  } = form;
 
-  async function submit(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setSaving(true);
-    setError("");
-    const body = Object.fromEntries(new FormData(event.currentTarget));
-    const response = await fetch("/api/auth/login", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
-    const data = await parseJsonResponse<{ error?: string }>(response);
-    if (!response.ok || data.error) {
-      setError(data.error ?? "Unable to sign in");
-      setSaving(false);
+  const submit = handleSubmit(async (values) => {
+    clearErrors("root");
+    const result = await apiRequest("/api/auth/login", { method: "POST", json: values });
+
+    if (!result.ok) {
+      applyApiErrors(result, setError);
       return;
     }
+
+    toast.success("Signed in.");
     router.push("/dashboard");
-  }
+  });
 
   return (
-    <main className="flex min-h-screen w-full items-center justify-center bg-blueprint-grid px-6">
-      <form onSubmit={submit} className="corner-marks w-full max-w-md space-y-5 rounded-2xl border border-[var(--line)] bg-[var(--paper-raised)] p-8 shadow-sm">
-        <div>
-          <p className="font-mono text-xs uppercase tracking-widest text-[var(--accent-ink)] dark:text-[var(--accent)]">Operant Expo</p>
-          <h1 className="mt-2 font-display text-3xl font-semibold tracking-tight text-[var(--ink)]">Welcome back</h1>
-          <p className="mt-2 text-sm text-[var(--ink-soft)]">Sign in to manage your exhibitions.</p>
+    <main className="flex min-h-screen w-full items-center justify-center bg-blueprint-grid px-4 py-10">
+      <Card className="corner-marks w-full max-w-md p-8">
+        <div className="space-y-2">
+          <p className="font-mono text-xs uppercase tracking-widest text-[var(--brand-quiet)]">Operant Expo</p>
+          <h1 className="font-display text-3xl font-semibold tracking-tight text-[var(--ink)]">Welcome back</h1>
+          <p className="text-sm text-[var(--ink-soft)]">Sign in to manage your exhibitions.</p>
         </div>
-        {error && <p role="alert" className="rounded-md border border-[var(--booked)] bg-[color-mix(in_srgb,var(--booked)_10%,transparent)] p-3 text-sm text-[var(--booked)]">{error}</p>}
-        <label className="block text-sm font-medium text-[var(--ink)]">
-          Email
-          <input name="email" type="email" required className="mt-2 w-full rounded-md border border-[var(--line-strong)] bg-transparent p-3" />
-        </label>
-        <label className="block text-sm font-medium text-[var(--ink)]">
-          Password
-          <input name="password" type="password" required minLength={8} className="mt-2 w-full rounded-md border border-[var(--line-strong)] bg-transparent p-3" />
-        </label>
-        <button disabled={saving} className="w-full rounded-md bg-[var(--accent)] p-3 font-medium text-[var(--accent-ink)] disabled:opacity-60">
-          {saving ? "Signing in…" : "Sign in"}
-        </button>
-        <p className="text-sm text-[var(--ink-soft)]">New here? <Link className="font-medium text-[var(--accent-ink)] dark:text-[var(--accent)]" href="/register">Create an account</Link></p>
-      </form>
+
+        <form onSubmit={submit} className="mt-6 space-y-4" noValidate>
+          {errors.root?.message && (
+            <Alert variant="destructive">
+              <AlertDescription>{errors.root.message}</AlertDescription>
+            </Alert>
+          )}
+
+          <Field label="Email" error={errors.email?.message} required>
+            <Input {...register("email")} type="email" autoComplete="email" placeholder="name@company.com" />
+          </Field>
+
+          <Field label="Password" error={errors.password?.message} required>
+            <Input {...register("password")} type="password" autoComplete="current-password" placeholder="••••••••" />
+          </Field>
+
+          <Button type="submit" loading={isSubmitting} className="w-full" size="lg">
+            {isSubmitting ? "Signing in…" : "Sign in"}
+          </Button>
+        </form>
+
+        <p className="mt-5 text-sm text-[var(--ink-soft)]">
+          New here?{" "}
+          <Link className="font-medium text-[var(--brand-quiet)] hover:underline" href="/register">
+            Create an account
+          </Link>
+        </p>
+      </Card>
     </main>
   );
 }

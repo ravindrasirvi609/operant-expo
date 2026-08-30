@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { ObjectId } from "mongodb";
-import { requireOrganizationPermission } from "@/lib/auth/authorization";
+import { requireApiPermission } from "@/lib/auth/authorization";
 import { getDatabase } from "@/lib/db/client";
 import type { ReservationHoldDocument } from "@/models/booking";
 import type { StallDocument } from "@/models/stall";
@@ -8,7 +8,8 @@ import type { ExhibitionDocument } from "@/models/exhibition";
 
 export async function GET(_: Request, { params }: { params: Promise<{ organizationId: string }> }) {
   const { organizationId } = await params;
-  await requireOrganizationPermission(organizationId, "booking:view");
+  const auth = await requireApiPermission(organizationId, "booking:view");
+  if (!auth.ok) return auth.response;
   const database = await getDatabase();
   const holds = await database.collection<ReservationHoldDocument>("reservationHolds")
     .find({ organizationId: new ObjectId(organizationId), status: "ACTIVE" })

@@ -1,24 +1,27 @@
 import { NextResponse } from "next/server";
 import { MongoServerError, ObjectId } from "mongodb";
 
-import { requireOrganizationPermission } from "@/lib/auth/authorization";
+import { requireApiPermission } from "@/lib/auth/authorization";
 import { getDatabase } from "@/lib/db/client";
 import { readBody } from "@/lib/http/body";
 import { exhibitionCreateSchema } from "@/lib/validation/exhibition";
 import type { ExhibitionDocument } from "@/models/exhibition";
+import { badRequest } from "@/lib/http/responses";
 
 export async function GET(_: Request, { params }: { params: Promise<{ organizationId: string }> }) {
   const { organizationId } = await params;
-  await requireOrganizationPermission(organizationId, "exhibition:view");
+  const auth = await requireApiPermission(organizationId, "exhibition:view");
+  if (!auth.ok) return auth.response;
   const exhibitions = await (await getDatabase()).collection<ExhibitionDocument>("exhibitions").find({ organizationId: new ObjectId(organizationId) }).sort({ startDate: -1 }).toArray();
   return NextResponse.json({ exhibitions });
 }
 
 export async function POST(request: Request, { params }: { params: Promise<{ organizationId: string }> }) {
   const { organizationId } = await params;
-  await requireOrganizationPermission(organizationId, "exhibition:manage");
+  const auth = await requireApiPermission(organizationId, "exhibition:manage");
+  if (!auth.ok) return auth.response;
   const parsed = exhibitionCreateSchema.safeParse(await readBody(request));
-  if (!parsed.success) return NextResponse.json({ error: "Invalid exhibition details", details: parsed.error.flatten() }, { status: 400 });
+  if (!parsed.success) return badRequest(parsed.error, "Check the exhibition details.");
   const database = await getDatabase();
   if (parsed.data.venueId && !ObjectId.isValid(parsed.data.venueId)) return NextResponse.json({ error: "Invalid venue" }, { status: 400 });
   if (parsed.data.venueId && !(await database.collection("venues").findOne({ _id: new ObjectId(parsed.data.venueId), organizationId: new ObjectId(organizationId) }))) return NextResponse.json({ error: "Venue does not belong to this organization" }, { status: 400 });

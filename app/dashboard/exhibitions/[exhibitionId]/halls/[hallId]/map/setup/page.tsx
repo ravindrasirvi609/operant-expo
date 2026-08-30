@@ -58,7 +58,7 @@ export default function SetupPage({ params, searchParams }: { params: Promise<{ 
       <DimensionDivider className="mt-6" />
 
       {message && (
-        <p role={phase === "error" ? "alert" : "status"} className={`mt-5 rounded-md border p-3 text-sm ${phase === "error" ? "border-[var(--booked)] bg-[color-mix(in_srgb,var(--booked)_10%,transparent)] text-[var(--booked)]" : phase === "done" ? "border-[var(--available)] bg-[color-mix(in_srgb,var(--available)_10%,transparent)] text-[var(--available)]" : "border-[var(--line)] bg-[var(--paper)] text-[var(--ink-soft)]"}`}>
+        <p role={phase === "error" ? "alert" : "status"} className={`mt-5 rounded-md border p-3 text-sm ${phase === "error" ? "border-[var(--status-booked)] bg-[color-mix(in_srgb,var(--status-booked)_10%,transparent)] text-[var(--status-booked)]" : phase === "done" ? "border-[var(--status-available)] bg-[color-mix(in_srgb,var(--status-available)_10%,transparent)] text-[var(--status-available)]" : "border-[var(--line)] bg-[var(--paper)] text-[var(--ink-soft)]"}`}>
           {message}
         </p>
       )}
@@ -68,7 +68,7 @@ export default function SetupPage({ params, searchParams }: { params: Promise<{ 
           onDragOver={(event) => { event.preventDefault(); setDragging(true); }}
           onDragLeave={() => setDragging(false)}
           onDrop={(event) => { event.preventDefault(); setDragging(false); const dropped = event.dataTransfer.files?.[0]; if (dropped) pickFile(dropped); }}
-          className={`flex min-h-[180px] flex-col items-center justify-center gap-3 rounded-xl border-2 border-dashed p-6 text-center text-sm transition-colors ${dragging ? "border-[var(--accent)] bg-[color-mix(in_srgb,var(--accent)_8%,transparent)]" : "border-[var(--line-strong)]"}`}
+          className={`flex min-h-[180px] flex-col items-center justify-center gap-3 rounded-xl border-2 border-dashed p-6 text-center text-sm transition-colors ${dragging ? "border-[var(--brand)] bg-[color-mix(in_srgb,var(--brand)_8%,transparent)]" : "border-[var(--line-strong)]"}`}
         >
           {preview ? (
             // eslint-disable-next-line @next/next/no-img-element
@@ -91,7 +91,7 @@ export default function SetupPage({ params, searchParams }: { params: Promise<{ 
           </label>
         </div>
 
-        <button disabled={!ids?.organizationId || !file || phase === "uploading" || phase === "creating"} className="w-full rounded-md bg-[var(--accent)] p-3 font-medium text-[var(--accent-ink)] disabled:opacity-50">
+        <button disabled={!ids?.organizationId || !file || phase === "uploading" || phase === "creating"} className="w-full rounded-md bg-[var(--brand)] p-3 font-medium text-[var(--brand-ink)] disabled:opacity-50">
           {phase === "uploading" ? "Uploading…" : phase === "creating" ? "Creating floor plan…" : "Create floor plan"}
         </button>
       </form>

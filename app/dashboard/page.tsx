@@ -1,14 +1,21 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import * as React from "react";
 import Link from "next/link";
+import { Building2, CalendarRange, Grid3x3, Receipt, Timer } from "lucide-react";
 
-import { SectionEyebrow } from "@/components/ui/section-eyebrow";
+import { useOrganization } from "@/components/providers/organization-provider";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
 import { DimensionDivider } from "@/components/ui/dimension-divider";
+import { EmptyState } from "@/components/ui/empty-state";
+import { SectionEyebrow } from "@/components/ui/section-eyebrow";
+import { Skeleton } from "@/components/ui/skeleton";
 import { StatCard } from "@/components/ui/stat-card";
 import { StatusBadge } from "@/components/ui/status-badge";
+import { apiGet } from "@/lib/http/client";
 
-type Organization = { _id: string; name: string };
 type Summary = {
   exhibitionCount: number;
   totalStalls: number;
@@ -20,99 +27,152 @@ type Summary = {
   grossConfirmed: number;
 };
 
-export default function DashboardPage() {
-  const [organizations, setOrganizations] = useState<Organization[]>([]);
-  const [organizationId, setOrganizationId] = useState("");
-  const [summary, setSummary] = useState<Summary | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
+const QUICK_LINKS = [
+  { href: "/dashboard/exhibitions", label: "Manage exhibitions", icon: CalendarRange },
+  { href: "/dashboard/stalls", label: "Manage stalls", icon: Grid3x3 },
+  { href: "/dashboard/bookings", label: "Review bookings", icon: Receipt },
+  { href: "/dashboard/holds", label: "View live holds", icon: Timer },
+];
 
-  async function load(id: string) {
+function SummarySkeleton() {
+  return (
+    <div className="mt-8 space-y-4">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        {Array.from({ length: 4 }).map((_, index) => (
+          <Skeleton key={index} className="h-28" />
+        ))}
+      </div>
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        {Array.from({ length: 4 }).map((_, index) => (
+          <Skeleton key={index} className="h-28" />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+export default function DashboardPage() {
+  const { organizationId, organization, loading: organizationsLoading, error: organizationsError } = useOrganization();
+  const [summary, setSummary] = React.useState<Summary | null>(null);
+  const [loading, setLoading] = React.useState(true);
+  const [error, setError] = React.useState("");
+
+  React.useEffect(() => {
+    if (!organizationId) {
+      // No organization selected yet — either still loading the list, or the user has none.
+      setSummary(null);
+      setLoading(organizationsLoading);
+      return;
+    }
+
+    let cancelled = false;
     setLoading(true);
     setError("");
-    try {
-      const response = await fetch(`/api/organizations/${id}/summary`);
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.error ?? "Unable to load workspace summary");
-      setSummary(data);
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Unable to load workspace summary");
-    } finally {
-      setLoading(false);
-    }
-  }
 
-  useEffect(() => {
-    fetch("/api/me/organizations")
-      .then((response) => response.json())
-      .then((data) => {
-        setOrganizations(data.organizations ?? []);
-        const first = data.organizations?.[0];
-        if (first) {
-          setOrganizationId(first._id);
-          void load(first._id);
-        } else setLoading(false);
-      })
-      .catch(() => {
-        setError("Unable to load organizations");
-        setLoading(false);
-      });
-  }, []);
+    void apiGet<Summary>(`/api/organizations/${organizationId}/summary`).then((result) => {
+      // A fast organization switch can land two responses out of order; ignore the stale one.
+      if (cancelled) return;
+      if (!result.ok) setError(result.error);
+      else setSummary(result.data);
+      setLoading(false);
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [organizationId, organizationsLoading]);
+
+  const stallStatuses = ["AVAILABLE", "HELD", "PENDING", "BOOKED", "BLOCKED"] as const;
 
   return (
-    <main className="mx-auto max-w-6xl px-6 py-12">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <SectionEyebrow>Organizer workspace</SectionEyebrow>
-          <h1 className="mt-2 font-display text-4xl font-semibold tracking-tight text-[var(--ink)]">Overview</h1>
-        </div>
-        {organizations.length > 0 && (
-          <select
-            aria-label="Organization"
-            value={organizationId}
-            onChange={(event) => { setOrganizationId(event.target.value); void load(event.target.value); }}
-            className="rounded-md border border-[var(--line-strong)] bg-[var(--paper-raised)] px-3 py-2 text-sm"
-          >
-            {organizations.map((organization) => <option key={organization._id} value={organization._id}>{organization.name}</option>)}
-          </select>
+    <main className="mx-auto max-w-6xl px-4 py-10 sm:px-6">
+      <div className="flex flex-col gap-2">
+        <SectionEyebrow>Organizer workspace</SectionEyebrow>
+        <h1 className="font-display text-3xl font-semibold tracking-tight text-[var(--ink)] sm:text-4xl">Overview</h1>
+        {organization && (
+          <p className="text-sm text-[var(--ink-soft)]">
+            {organization.name} · your role is {organization.role.toLowerCase().replace(/_/g, " ")}
+          </p>
         )}
       </div>
       <DimensionDivider className="mt-6" />
 
-      {error && <p role="alert" className="mt-6 rounded-md border border-[var(--booked)] bg-[color-mix(in_srgb,var(--booked)_10%,transparent)] p-3 text-sm text-[var(--booked)]">{error}</p>}
+      {organizationsError && (
+        <Alert variant="destructive" className="mt-6">
+          <AlertTitle>Couldn&apos;t load your workspaces</AlertTitle>
+          <AlertDescription>{organizationsError}</AlertDescription>
+        </Alert>
+      )}
+
+      {error && (
+        <Alert variant="destructive" className="mt-6">
+          <AlertTitle>Couldn&apos;t load this workspace</AlertTitle>
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
+      )}
 
       {loading ? (
-        <p className="mt-8 text-[var(--ink-soft)]">Loading workspace…</p>
-      ) : organizations.length === 0 ? (
-        <div className="mt-8 rounded-2xl border border-dashed border-[var(--line-strong)] p-12 text-center text-[var(--ink-soft)]">
-          No organization yet. <Link href="/dashboard/organizations/new" className="font-medium text-[var(--accent-ink)] dark:text-[var(--accent)]">Create one</Link> to get started.
-        </div>
+        <SummarySkeleton />
+      ) : !organizationId ? (
+        <EmptyState
+          className="mt-8"
+          icon={Building2}
+          title="Create your first organization"
+          description="An organization holds your exhibitions, halls, stalls and bookings. You can create more later for other teams."
+          action={
+            <Button asChild>
+              <Link href="/dashboard/organizations/new">Create organization</Link>
+            </Button>
+          }
+        />
       ) : summary ? (
         <>
           <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             <StatCard label="Exhibitions" value={summary.exhibitionCount} />
             <StatCard label="Total stalls" value={summary.totalStalls} />
-            <StatCard label="Occupancy" value={`${summary.occupancyRate}%`} hint={`${summary.stallsByStatus.BOOKED ?? 0} booked`} />
+            <StatCard
+              label="Occupancy"
+              value={`${summary.occupancyRate}%`}
+              hint={`${summary.stallsByStatus.BOOKED ?? 0} booked`}
+            />
             <StatCard label="Active holds" value={summary.activeHolds} hint="Countdown in progress" />
           </div>
+
           <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             <StatCard label="Pending confirmation" value={summary.pendingBookings} />
             <StatCard label="Confirmed bookings" value={summary.confirmedBookings} />
             <StatCard label="Gross confirmed" value={summary.grossConfirmed.toLocaleString()} />
-            <div className="corner-marks flex flex-col items-start justify-center gap-2 rounded-xl border border-[var(--line)] bg-[var(--paper-raised)] p-5">
-              {(["AVAILABLE", "HELD", "BOOKED", "BLOCKED"] as const).map((status) => (
-                <div key={status} className="flex w-full items-center justify-between">
+            <Card className="corner-marks flex flex-col justify-center gap-2 p-5">
+              {stallStatuses.map((status) => (
+                <div key={status} className="flex w-full items-center justify-between gap-2">
                   <StatusBadge status={status} />
-                  <span className="font-mono text-sm tabular text-[var(--ink)]">{summary.stallsByStatus[status] ?? 0}</span>
+                  <span className="font-mono text-sm tabular text-[var(--ink)]">
+                    {summary.stallsByStatus[status] ?? 0}
+                  </span>
                 </div>
               ))}
-            </div>
+            </Card>
           </div>
-          <div className="mt-8 flex flex-wrap gap-3">
-            <Link href="/dashboard/exhibitions" className="rounded-md border border-[var(--line-strong)] px-4 py-2 text-sm font-medium text-[var(--ink)]">Manage exhibitions →</Link>
-            <Link href="/dashboard/stalls" className="rounded-md border border-[var(--line-strong)] px-4 py-2 text-sm font-medium text-[var(--ink)]">Manage stalls →</Link>
-            <Link href="/dashboard/bookings" className="rounded-md border border-[var(--line-strong)] px-4 py-2 text-sm font-medium text-[var(--ink)]">Review bookings →</Link>
-            <Link href="/dashboard/holds" className="rounded-md border border-[var(--line-strong)] px-4 py-2 text-sm font-medium text-[var(--ink)]">View live holds →</Link>
+
+          {summary.totalStalls === 0 && (
+            <Alert variant="info" className="mt-6">
+              <AlertTitle>No bookable stalls yet</AlertTitle>
+              <AlertDescription>
+                Add a hall to an exhibition, then design its floor plan to place and price stalls. Visitors can only
+                book stalls that exist on a published plan.
+              </AlertDescription>
+            </Alert>
+          )}
+
+          <div className="mt-8 flex flex-wrap gap-2">
+            {QUICK_LINKS.map((link) => (
+              <Button key={link.href} asChild variant="outline">
+                <Link href={link.href}>
+                  <link.icon aria-hidden />
+                  {link.label}
+                </Link>
+              </Button>
+            ))}
           </div>
         </>
       ) : null}

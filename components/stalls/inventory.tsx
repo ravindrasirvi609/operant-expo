@@ -42,7 +42,7 @@ export default function StallsInventory() {
         <select name="visibility" defaultValue={stall?.visibility ?? "PUBLIC"} className="rounded-md border border-[var(--line-strong)] bg-[var(--paper-raised)] p-3"><option value="PUBLIC">PUBLIC</option><option value="PRIVATE">PRIVATE</option></select>
       </div>
       <div className="flex gap-2">
-        <button className="flex-1 rounded-md bg-[var(--accent)] p-3 font-semibold text-[var(--accent-ink)]">{stall ? "Save changes" : "Create stall"}</button>
+        <button className="flex-1 rounded-md bg-[var(--brand)] p-3 font-semibold text-[var(--brand-ink)]">{stall ? "Save changes" : "Create stall"}</button>
         {stall && <button type="button" onClick={() => setEditing(undefined)} className="rounded-md border border-[var(--line-strong)] px-4 text-[var(--ink)]">Cancel</button>}
       </div>
     </form>
@@ -61,8 +61,8 @@ export default function StallsInventory() {
           <select value={hallId} onChange={(e) => void loadHall(e.target.value)} className="rounded-md border border-[var(--line-strong)] bg-[var(--paper-raised)] px-3 py-2 text-sm">{halls.map((h) => <option key={h._id} value={h._id}>{h.name}</option>)}</select>
         </div>
       </div>
-      {error && <p role="alert" className="mt-5 rounded-md border border-[var(--booked)] bg-[color-mix(in_srgb,var(--booked)_10%,transparent)] p-4 text-sm text-[var(--booked)]">{error}</p>}
-      {message && <p role="status" className="mt-5 rounded-md border border-[var(--available)] bg-[color-mix(in_srgb,var(--available)_10%,transparent)] p-4 text-sm text-[var(--available)]">{message}</p>}
+      {error && <p role="alert" className="mt-5 rounded-md border border-[var(--status-booked)] bg-[color-mix(in_srgb,var(--status-booked)_10%,transparent)] p-4 text-sm text-[var(--status-booked)]">{error}</p>}
+      {message && <p role="status" className="mt-5 rounded-md border border-[var(--status-available)] bg-[color-mix(in_srgb,var(--status-available)_10%,transparent)] p-4 text-sm text-[var(--status-available)]">{message}</p>}
       <div className="mt-8 grid gap-8 xl:grid-cols-[1fr_360px]">
         <section className="overflow-hidden rounded-2xl border border-[var(--line)] bg-[var(--paper-raised)] shadow-sm">
           <div className="border-b border-[var(--line)] p-5">

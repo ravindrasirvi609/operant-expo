@@ -85,7 +85,7 @@ export default function BookingsPage() {
         </select>
       </div>
 
-      {error && <p role="alert" className="mt-5 rounded-md border border-[var(--booked)] bg-[color-mix(in_srgb,var(--booked)_10%,transparent)] p-3 text-sm text-[var(--booked)]">{error}</p>}
+      {error && <p role="alert" className="mt-5 rounded-md border border-[var(--status-booked)] bg-[color-mix(in_srgb,var(--status-booked)_10%,transparent)] p-3 text-sm text-[var(--status-booked)]">{error}</p>}
 
       <div className="mt-6 grid gap-4 sm:grid-cols-3">
         <StatCard label="Total bookings" value={bookings.length} />
@@ -100,7 +100,7 @@ export default function BookingsPage() {
           <button
             key={value}
             onClick={() => setFilter(value)}
-            className={`rounded-full px-3 py-1.5 text-sm ${filter === value ? "bg-[var(--accent)] text-[var(--accent-ink)]" : "border border-[var(--line-strong)] text-[var(--ink-soft)]"}`}
+            className={`rounded-full px-3 py-1.5 text-sm ${filter === value ? "bg-[var(--brand)] text-[var(--brand-ink)]" : "border border-[var(--line-strong)] text-[var(--ink-soft)]"}`}
           >
             {value.replace("_", " ")}
           </button>
@@ -146,8 +146,8 @@ export default function BookingsPage() {
                       <div className="flex justify-end gap-2">
                         {booking.status === "PAYMENT_PENDING" && (
                           <>
-                            <button onClick={() => void updateStatus(booking._id, "CONFIRMED")} className="rounded-md border border-[var(--available)] px-2.5 py-1 text-xs font-medium text-[var(--available)]">Confirm paid</button>
-                            <button onClick={() => void updateStatus(booking._id, "CANCELLED")} className="rounded-md border border-[var(--booked)] px-2.5 py-1 text-xs font-medium text-[var(--booked)]">Cancel</button>
+                            <button onClick={() => void updateStatus(booking._id, "CONFIRMED")} className="rounded-md border border-[var(--status-available)] px-2.5 py-1 text-xs font-medium text-[var(--status-available)]">Confirm paid</button>
+                            <button onClick={() => void updateStatus(booking._id, "CANCELLED")} className="rounded-md border border-[var(--status-booked)] px-2.5 py-1 text-xs font-medium text-[var(--status-booked)]">Cancel</button>
                           </>
                         )}
                         {booking.invoiceId && (

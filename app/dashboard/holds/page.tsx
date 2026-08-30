@@ -22,7 +22,7 @@ function Countdown({ expiresAt }: { expiresAt: string }) {
   }, [expiresAt]);
   const expired = seconds === 0;
   return (
-    <span className={`font-mono tabular text-sm ${expired ? "text-[var(--ink-faint)]" : "text-[var(--held)]"}`}>
+    <span className={`font-mono tabular text-sm ${expired ? "text-[var(--ink-faint)]" : "text-[var(--status-held)]"}`}>
       {expired ? "expiring…" : `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`}
     </span>
   );
@@ -87,7 +87,7 @@ export default function HoldsPage() {
       </div>
       <DimensionDivider className="mt-6" />
 
-      {error && <p role="alert" className="mt-5 rounded-md border border-[var(--booked)] bg-[color-mix(in_srgb,var(--booked)_10%,transparent)] p-3 text-sm text-[var(--booked)]">{error}</p>}
+      {error && <p role="alert" className="mt-5 rounded-md border border-[var(--status-booked)] bg-[color-mix(in_srgb,var(--status-booked)_10%,transparent)] p-3 text-sm text-[var(--status-booked)]">{error}</p>}
 
       <section className="mt-6 overflow-hidden rounded-xl border border-[var(--line)] bg-[var(--paper-raised)]">
         {loading ? (

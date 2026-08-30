@@ -1,15 +1,17 @@
 import { NextResponse } from "next/server";
 import { ObjectId } from "mongodb";
 
-import { requireOrganizationPermission } from "@/lib/auth/authorization";
+import { requireApiPermission } from "@/lib/auth/authorization";
 import { getDatabase } from "@/lib/db/client";
 import { readBody } from "@/lib/http/body";
 import { mapElementSchema } from "@/lib/validation/map";
 import type { FloorPlanDocument, MapElementDocument } from "@/models/map";
+import { badRequest } from "@/lib/http/responses";
 
 export async function GET(_: Request, { params }: { params: Promise<{ organizationId: string; floorPlanId: string }> }) {
   const { organizationId, floorPlanId } = await params;
-  await requireOrganizationPermission(organizationId, "exhibition:view");
+  const auth = await requireApiPermission(organizationId, "exhibition:view");
+  if (!auth.ok) return auth.response;
   if (!ObjectId.isValid(floorPlanId)) return NextResponse.json({ error: "Invalid floor plan" }, { status: 400 });
   const elements = await (await getDatabase()).collection<MapElementDocument>("mapElements").find({ organizationId: new ObjectId(organizationId), floorPlanId: new ObjectId(floorPlanId) }).sort({ zIndex: 1 }).toArray();
   return NextResponse.json({ elements });
@@ -17,13 +19,14 @@ export async function GET(_: Request, { params }: { params: Promise<{ organizati
 
 export async function POST(request: Request, { params }: { params: Promise<{ organizationId: string; floorPlanId: string }> }) {
   const { organizationId, floorPlanId } = await params;
-  await requireOrganizationPermission(organizationId, "map:edit");
+  const auth = await requireApiPermission(organizationId, "map:edit");
+  if (!auth.ok) return auth.response;
   if (!ObjectId.isValid(floorPlanId)) return NextResponse.json({ error: "Invalid floor plan" }, { status: 400 });
   const database = await getDatabase();
   const plan = await database.collection<FloorPlanDocument>("floorPlans").findOne({ _id: new ObjectId(floorPlanId), organizationId: new ObjectId(organizationId) });
   if (!plan) return NextResponse.json({ error: "Floor plan not found" }, { status: 404 });
   const parsed = mapElementSchema.safeParse(await readBody(request));
-  if (!parsed.success) return NextResponse.json({ error: "Invalid map element", details: parsed.error.flatten() }, { status: 400 });
+  if (!parsed.success) return badRequest(parsed.error, "Check the element's position and size.");
   const { geometry } = parsed.data;
   if (geometry.x + geometry.width > plan.canvasWidth || geometry.y + geometry.height > plan.canvasHeight) return NextResponse.json({ error: "Element must fit inside the floor plan canvas" }, { status: 400 });
   const now = new Date();

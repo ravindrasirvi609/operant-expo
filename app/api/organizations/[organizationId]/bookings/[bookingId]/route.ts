@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { ObjectId } from "mongodb";
 
-import { requireOrganizationPermission } from "@/lib/auth/authorization";
+import { requireApiPermission } from "@/lib/auth/authorization";
 import { getDatabase } from "@/lib/db/client";
 import { readBody } from "@/lib/http/body";
 import type { BookingDocument } from "@/models/booking";
@@ -12,7 +12,8 @@ import { withTransaction } from "@/lib/db/transaction";
 
 export async function PATCH(request: Request, { params }: { params: Promise<{ organizationId: string; bookingId: string }> }) {
   const { organizationId, bookingId } = await params;
-  await requireOrganizationPermission(organizationId, "booking:manage");
+  const auth = await requireApiPermission(organizationId, "booking:manage");
+  if (!auth.ok) return auth.response;
   if (!ObjectId.isValid(bookingId)) return NextResponse.json({ error: "Invalid booking" }, { status: 400 });
 
   const body = (await readBody(request)) as { status?: BookingDocument["status"] };
