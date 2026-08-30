@@ -39,6 +39,7 @@ mongosh --eval 'rs.initiate()'
 | `RESEND_API_KEY`, `RESEND_FROM_EMAIL` | no | Outbound email. Unset means email events queue but do not send. |
 | `CLOUDFLARE_*`, `NEXT_PUBLIC_CLOUDFLARE_R2_PUBLIC_URL` | no | R2 object storage for floor-plan backgrounds. |
 | `ASSET_STORAGE_DIR` | no | Where uploads go when R2 is unconfigured. Defaults to `.uploads/`. |
+| `HOLD_DURATION_MINUTES` | no | How long a visitor's stall reservation lasts. Defaults to 15. |
 
 **Background images are optional.** With no R2 configuration, uploads fall back to the local
 filesystem and are served from `/api/assets/*`; a floor plan can also be created with no background
@@ -54,7 +55,19 @@ at all and stalls placed directly on the grid.
 4. **Publish the plan** — refused until the readiness checklist passes, so a plan visitors cannot
    book from never reaches them.
 5. **Open booking** — publishing the *exhibition* makes the map visible; opening booking is a
-   separate step, and until it is taken visitors can see stalls but not reserve them.
+   separate step, and until it is taken visitors can browse stalls but not reserve them. The public
+   page says which of those two states it is in rather than letting a click fail.
+
+### How a visitor books
+
+Selecting a stall opens a detail sheet — number, size, price, what is included — and reserves
+nothing. "Reserve" then holds it for them, identified by an anonymous httpOnly cookie, and the
+three-step flow (review → details → submitted) ends on a booking that is explicitly *awaiting
+payment*, not confirmed.
+
+Because the hold has an owner, reloading or coming back resumes the same reservation instead of
+locking the visitor out of it; another visitor is told how long is left. Lapsed holds are swept on
+every public read, so the map does not advertise stalls that are not really free.
 
 ### Units
 

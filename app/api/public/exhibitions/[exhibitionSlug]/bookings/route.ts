@@ -1,33 +1,63 @@
-import { NextResponse } from "next/server";
-import { MongoServerError, ObjectId } from "mongodb";
-import { randomUUID } from "node:crypto";
+import { BookingError, createBooking, findReplay } from "@/lib/bookings/create";
+import { loadStallContext } from "@/lib/booking/holds";
+import { readVisitorId } from "@/lib/booking/visitor";
 import { getDatabase } from "@/lib/db/client";
-import { withTransaction } from "@/lib/db/transaction";
-import { writeAudit } from "@/lib/audit";
-import { queueEmail } from "@/lib/email";
-import { ManualPaymentProvider } from "@/lib/payments";
 import { readBody } from "@/lib/http/body";
-import { setStallStatus } from "@/lib/stalls/availability";
+import { badRequest, conflict, created, notFoundJson, ok, serverError, unprocessable } from "@/lib/http/responses";
 import { bookingSchema } from "@/lib/validation/booking";
-import type { BookingDocument, ExhibitorDocument, ReservationHoldDocument } from "@/models/booking";
-import type { ExhibitionDocument } from "@/models/exhibition";
-import type { InvoiceDocument, PaymentDocument } from "@/models/commercial";
-import type { StallDocument } from "@/models/stall";
-import { badRequest } from "@/lib/http/responses";
 
-export async function POST(request: Request, { params }: { params: Promise<{ exhibitionSlug: string }> }) {
-  const { exhibitionSlug } = await params; const parsed = bookingSchema.safeParse(await readBody(request));
-  if (!parsed.success) return badRequest(parsed.error, "Check your booking details.");
-  if (!ObjectId.isValid(parsed.data.stallId)) return NextResponse.json({ error: "Invalid stall" }, { status: 400 });
-  const idempotencyKey = request.headers.get("idempotency-key")?.trim(); const database = await getDatabase();
-  if (idempotencyKey) { const existing = await database.collection<BookingDocument>("bookings").findOne({ idempotencyKey }); if (existing) return NextResponse.json({ booking: { id: existing._id!.toString(), bookingNumber: existing.bookingNumber, status: existing.status, total: existing.commercialSnapshot.total, currency: existing.commercialSnapshot.currency }, idempotentReplay: true }); }
-  const now = new Date(); const exhibition = await database.collection<ExhibitionDocument>("exhibitions").findOne({ slug: exhibitionSlug, lifecycle: "BOOKING_OPEN" });
-  // AVAILABLE or HELD are both bookable here — a stall the visitor legitimately holds was already
-  // flipped to HELD by the hold route, so requiring AVAILABLE would reject every real booking.
-  // The ACTIVE, non-expired hold check just below is the actual gate against double-booking.
-  const stall = exhibition?._id ? await database.collection<StallDocument>("stalls").findOne({ _id: new ObjectId(parsed.data.stallId), exhibitionId: exhibition._id, status: { $in: ["AVAILABLE", "HELD"] }, visibility: "PUBLIC" }) : null;
-  if (!exhibition?._id || !stall?._id) return NextResponse.json({ error: "Stall is no longer available" }, { status: 409 });
-  const hold = await database.collection<ReservationHoldDocument>("reservationHolds").findOne({ stallId: stall._id, status: "ACTIVE", expiresAt: { $gt: now } });
-  if (!hold?._id) return NextResponse.json({ error: "Your reservation has expired. Please reserve the stall again." }, { status: 409 });
-  try { const result = await withTransaction(database, async (session) => { const existingExhibitor = await database.collection<ExhibitorDocument>("exhibitors").findOne({ organizationId: stall.organizationId, email: parsed.data.email.toLowerCase() }, { session }); const exhibitor = existingExhibitor ?? { _id: new ObjectId(), organizationId: stall.organizationId, companyName: parsed.data.companyName, legalName: parsed.data.legalName, contactPerson: parsed.data.contactPerson, email: parsed.data.email.toLowerCase(), phone: parsed.data.phone, address: parsed.data.address, taxIdentifier: parsed.data.taxIdentifier, createdAt: now, updatedAt: now }; if (!existingExhibitor) await database.collection<ExhibitorDocument>("exhibitors").insertOne(exhibitor, { session }); const booking: BookingDocument = { _id: new ObjectId(), organizationId: stall.organizationId, exhibitionId: stall.exhibitionId, hallId: stall.hallId, stallId: stall._id!, exhibitorId: exhibitor._id!, bookingNumber: `BK-${randomUUID().slice(0, 8).toUpperCase()}`, status: "PAYMENT_PENDING", ...(idempotencyKey ? { idempotencyKey } : {}), commercialSnapshot: { basePrice: stall.basePrice, tax: 0, fees: 0, discounts: 0, total: stall.basePrice, currency: stall.currency }, createdAt: now, updatedAt: now }; await database.collection<BookingDocument>("bookings").insertOne(booking, { session }); const released = await database.collection<ReservationHoldDocument>("reservationHolds").updateOne({ _id: hold._id, status: "ACTIVE" }, { $set: { status: "RELEASED", releasedAt: now } }, { session }); if (!released.modifiedCount) throw new Error("Reservation was already used or expired"); const payment = await new ManualPaymentProvider().createPaymentIntent({ amount: booking.commercialSnapshot.total, currency: booking.commercialSnapshot.currency, idempotencyKey: booking._id!.toString() }); const paymentRecord: PaymentDocument = { _id: new ObjectId(), organizationId: stall.organizationId, bookingId: booking._id!, provider: payment.provider, status: "PENDING", amount: payment.amount, currency: payment.currency, providerReference: payment.reference, idempotencyKey: booking._id!.toString(), createdAt: now, updatedAt: now }; await database.collection<PaymentDocument>("payments").insertOne(paymentRecord, { session }); const invoice: InvoiceDocument = { _id: new ObjectId(), organizationId: stall.organizationId, bookingId: booking._id!, invoiceNumber: `INV-${booking.bookingNumber.slice(3)}`, status: "ISSUED", subtotal: stall.basePrice, tax: 0, fees: 0, total: stall.basePrice, currency: stall.currency, issuedAt: now, createdAt: now }; await database.collection<InvoiceDocument>("invoices").insertOne(invoice, { session }); await queueEmail(database, { organizationId: stall.organizationId, bookingId: booking._id, recipient: exhibitor.email, template: "booking-confirmation" }, session); await writeAudit(database, { organizationId: stall.organizationId, action: "booking.created", entityType: "Booking", entityId: booking._id!.toString(), after: { status: booking.status, stallId: stall._id!.toString(), total: booking.commercialSnapshot.total } }, session); await setStallStatus(database, stall._id!, "PENDING", session); return { booking, invoice, payment: paymentRecord }; }); return NextResponse.json({ booking: { id: result.booking._id!.toString(), bookingNumber: result.booking.bookingNumber, status: result.booking.status, total: result.booking.commercialSnapshot.total, currency: result.booking.commercialSnapshot.currency }, invoice: { invoiceNumber: result.invoice.invoiceNumber }, payment: { status: result.payment.status, provider: result.payment.provider } }, { status: 201 }); } catch (error) { if (error instanceof MongoServerError && error.code === 11000) return NextResponse.json({ error: "This booking was already submitted or the stall was just booked" }, { status: 409 }); return NextResponse.json({ error: error instanceof Error ? error.message : "Unable to create booking" }, { status: 409 }); }
+type RouteParams = { params: Promise<{ exhibitionSlug: string }> };
+
+/**
+ * Turns this visitor's held stall into a booking.
+ *
+ * The logic lives in lib/bookings/create.ts; this handler is the HTTP edge. The previous version was
+ * one 15-line-long statement whose catch-all mapped every failure to 409 and echoed the raw
+ * `error.message` to anonymous callers, so a driver or transaction fault was published verbatim and
+ * reported as a conflict.
+ */
+export async function POST(request: Request, { params }: RouteParams) {
+  try {
+    const { exhibitionSlug } = await params;
+
+    const parsed = bookingSchema.safeParse(await readBody(request));
+    if (!parsed.success) return badRequest(parsed.error, "Check your details.");
+
+    const idempotencyKey = request.headers.get("idempotency-key")?.trim() || undefined;
+    const database = await getDatabase();
+
+    // Answered before any state is touched, so a retried submission cannot double-book.
+    const replay = await findReplay(database, idempotencyKey);
+    if (replay) return ok({ booking: replay, idempotentReplay: true });
+
+    const visitorId = await readVisitorId();
+    const context = await loadStallContext(database, {
+      exhibitionSlug,
+      stallId: parsed.data.stallId,
+      visitorId,
+    });
+    if (!context) return notFoundJson("That stall could not be found.");
+
+    const result = await createBooking(database, {
+      context,
+      input: parsed.data,
+      visitorId,
+      idempotencyKey,
+    });
+
+    const body = {
+      booking: result.booking,
+      invoice: result.invoice,
+      payment: result.payment,
+      ...(result.replayed ? { idempotentReplay: true } : {}),
+    };
+    return result.replayed ? ok(body) : created(body);
+  } catch (cause) {
+    if (cause instanceof BookingError) {
+      return cause.status === 422
+        ? unprocessable(cause.message, cause.code)
+        : conflict(cause.message, cause.code);
+    }
+    return serverError(cause, "POST /api/public/exhibitions/[slug]/bookings");
+  }
 }

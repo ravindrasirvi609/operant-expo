@@ -72,18 +72,22 @@ export function ReviewStep({
     toast.success("Booking is open.", { description: "Visitors can reserve stalls from the public page." });
   }
 
-  const viewerElements = api.elements.map((element) => {
-    const stall = api.stallByElementId.get(element._id);
-    return {
-      _id: element._id,
-      type: element.type,
-      label: stall?.stallNumber ?? element.label,
-      geometry: element.geometry,
-      visible: element.visible,
-      stallId: stall?._id,
-      status: stall?.status,
-    };
-  });
+  // No onSelectStall is passed, so the preview is read-only — clicking a stall here must not start
+  // a reservation on the organizer's behalf.
+  const viewerElements = api.elements
+    .filter((element) => element.visible)
+    .map((element) => {
+      const stall = api.stallByElementId.get(element._id);
+      return {
+        id: element._id,
+        type: element.type,
+        label: stall?.stallNumber ?? element.label,
+        geometry: element.geometry,
+        stallId: stall?._id,
+        status: stall?.status,
+        bookable: false,
+      };
+    });
 
   return (
     <div className="space-y-6">
@@ -180,7 +184,6 @@ export function ReviewStep({
               height={plan.canvasHeight}
               backgroundUrl={api.background?.url}
               elements={viewerElements}
-              interactive={false}
             />
           </div>
         )}
