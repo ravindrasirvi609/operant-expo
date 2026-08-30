@@ -18,20 +18,39 @@ type OrganizationState = {
   error: string;
   /** Re-reads the membership list — call after creating an organization. */
   refresh: () => Promise<void>;
-  /** Permission check for the *selected* organization, for hiding actions the role can't do. */
+  /** Permission check for the *selected* organization, for hiding actions the role cannot do. */
   can: (permission: string) => boolean;
 };
 
 const OrganizationContext = React.createContext<OrganizationState | null>(null);
 
+type Membership = { organizations: MyOrganization[]; error: string };
+
+const EMPTY: MyOrganization[] = [];
+
 function readStoredId() {
-  if (typeof window === "undefined") return "";
   try {
     return window.localStorage.getItem(STORAGE_KEY) ?? "";
   } catch {
-    // Private-browsing modes can throw on access; a missing preference is not an error.
+    // No window during server render, and private-browsing modes can throw on access. A missing
+    // preference is not an error.
     return "";
   }
+}
+
+function writeStoredId(organizationId: string) {
+  try {
+    window.localStorage.setItem(STORAGE_KEY, organizationId);
+  } catch {
+    // Selection still works for this session even if it cannot be persisted.
+  }
+}
+
+async function readMembership(): Promise<Membership> {
+  const result = await apiGet<{ organizations: MyOrganization[] }>("/api/me/organizations");
+  return result.ok
+    ? { organizations: result.data.organizations ?? [], error: "" }
+    : { organizations: [], error: result.error };
 }
 
 /**
@@ -42,48 +61,44 @@ function readStoredId() {
  * floor-plan screens instead demanded an `?organizationId=` query parameter that nothing in the
  * UI ever supplied — leaving their submit buttons permanently disabled. One provider, one
  * selection, persisted across reloads.
+ *
+ * The active id is *derived*, not stored: an explicit choice wins, else the persisted choice if it
+ * still resolves to a live membership, else the first organization. A revoked member therefore
+ * cannot stay pinned to a workspace they can no longer read, and no effect writes state during
+ * render to make that true.
  */
 export function OrganizationProvider({ children }: { children: React.ReactNode }) {
-  const [organizations, setOrganizations] = React.useState<MyOrganization[]>([]);
-  const [organizationId, setOrganizationId] = React.useState("");
-  const [loading, setLoading] = React.useState(true);
-  const [error, setError] = React.useState("");
-
-  const load = React.useCallback(async () => {
-    const result = await apiGet<{ organizations: MyOrganization[] }>("/api/me/organizations");
-    if (!result.ok) {
-      setError(result.error);
-      setLoading(false);
-      return;
-    }
-
-    const list = result.data.organizations ?? [];
-    setOrganizations(list);
-    setError("");
-
-    // Keep the stored selection only if it still resolves to a live membership — a revoked
-    // member must not stay pinned to an organization they can no longer read.
-    setOrganizationId((current) => {
-      const candidate = current || readStoredId();
-      const resolved = list.some((organization) => organization._id === candidate)
-        ? candidate
-        : (list[0]?._id ?? "");
-      return resolved;
-    });
-    setLoading(false);
-  }, []);
+  const [membership, setMembership] = React.useState<Membership | null>(null);
+  const [chosenId, setChosenId] = React.useState("");
 
   React.useEffect(() => {
-    void load();
-  }, [load]);
+    let cancelled = false;
+    void readMembership().then((next) => {
+      if (!cancelled) setMembership(next);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const refresh = React.useCallback(async () => {
+    setMembership(await readMembership());
+  }, []);
+
+  const organizations = membership?.organizations ?? EMPTY;
+
+  const organizationId = React.useMemo(() => {
+    if (organizations.length === 0) return "";
+    const exists = (candidate: string) => organizations.some((organization) => organization._id === candidate);
+    if (chosenId && exists(chosenId)) return chosenId;
+    const stored = readStoredId();
+    if (stored && exists(stored)) return stored;
+    return organizations[0]._id;
+  }, [organizations, chosenId]);
 
   const selectOrganization = React.useCallback((next: string) => {
-    setOrganizationId(next);
-    try {
-      window.localStorage.setItem(STORAGE_KEY, next);
-    } catch {
-      // Selection still works for this session even if it can't be persisted.
-    }
+    setChosenId(next);
+    writeStoredId(next);
   }, []);
 
   const organization = React.useMemo(
@@ -102,12 +117,12 @@ export function OrganizationProvider({ children }: { children: React.ReactNode }
       organization,
       organizationId,
       selectOrganization,
-      loading,
-      error,
-      refresh: load,
+      loading: membership === null,
+      error: membership?.error ?? "",
+      refresh,
       can,
     }),
-    [organizations, organization, organizationId, selectOrganization, loading, error, load, can],
+    [organizations, organization, organizationId, selectOrganization, membership, refresh, can],
   );
 
   return <OrganizationContext.Provider value={value}>{children}</OrganizationContext.Provider>;

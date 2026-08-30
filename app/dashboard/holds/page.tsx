@@ -1,11 +1,20 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import * as React from "react";
+import Link from "next/link";
+import { Building2, Timer } from "lucide-react";
 
-import { SectionEyebrow } from "@/components/ui/section-eyebrow";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
 import { DimensionDivider } from "@/components/ui/dimension-divider";
+import { EmptyState } from "@/components/ui/empty-state";
+import { SectionEyebrow } from "@/components/ui/section-eyebrow";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { useOrganization } from "@/components/providers/organization-provider";
+import { useOrgResource } from "@/lib/ui/use-org-resource";
 
-type Organization = { _id: string; name: string };
 type Hold = {
   _id: string;
   expiresAt: string;
@@ -14,113 +23,133 @@ type Hold = {
   exhibition: { name: string; slug: string } | null;
 };
 
+function remainingSeconds(expiresAt: string) {
+  return Math.max(0, Math.floor((new Date(expiresAt).getTime() - Date.now()) / 1000));
+}
+
 function Countdown({ expiresAt }: { expiresAt: string }) {
-  const [seconds, setSeconds] = useState(() => Math.max(0, Math.floor((new Date(expiresAt).getTime() - Date.now()) / 1000)));
-  useEffect(() => {
-    const timer = setInterval(() => setSeconds(Math.max(0, Math.floor((new Date(expiresAt).getTime() - Date.now()) / 1000))), 1000);
+  // Seeded from the timestamp rather than starting at zero, so the first render already shows
+  // the true remaining time instead of flashing 0:00 for a second.
+  const [seconds, setSeconds] = React.useState(() => remainingSeconds(expiresAt));
+
+  React.useEffect(() => {
+    const timer = setInterval(() => setSeconds(remainingSeconds(expiresAt)), 1000);
     return () => clearInterval(timer);
   }, [expiresAt]);
+
   const expired = seconds === 0;
   return (
-    <span className={`font-mono tabular text-sm ${expired ? "text-[var(--ink-faint)]" : "text-[var(--status-held)]"}`}>
-      {expired ? "expiring…" : `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`}
+    <span
+      className="font-mono text-sm tabular"
+      style={{ color: expired ? "var(--ink-faint)" : "var(--status-held-ink)" }}
+    >
+      {expired ? "releasing…" : `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`}
     </span>
   );
 }
 
 export default function HoldsPage() {
-  const [organizations, setOrganizations] = useState<Organization[]>([]);
-  const [organizationId, setOrganizationId] = useState("");
-  const [holds, setHolds] = useState<Hold[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
+  // Holds are short-lived by nature, so this screen polls. A failed background poll keeps the
+  // last good list on screen instead of blanking the table mid-read.
+  const { organizationId } = useOrganization();
+  const { data, loading, error, noOrganizations } = useOrgResource<{ holds: Hold[] }>(
+    organizationId ? `/api/organizations/${organizationId}/holds` : null,
+    { refreshMs: 15_000 },
+  );
 
-  async function load(id: string) {
-    setLoading(true);
-    setError("");
-    try {
-      const response = await fetch(`/api/organizations/${id}/holds`);
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.error ?? "Unable to load holds");
-      setHolds(data.holds);
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Unable to load holds");
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  useEffect(() => {
-    fetch("/api/me/organizations")
-      .then((response) => response.json())
-      .then((data) => {
-        setOrganizations(data.organizations ?? []);
-        const first = data.organizations?.[0];
-        if (first) {
-          setOrganizationId(first._id);
-          void load(first._id);
-        } else setLoading(false);
-      })
-      .catch(() => {
-        setError("Unable to load organizations");
-        setLoading(false);
-      });
-  }, []);
-
-  useEffect(() => {
-    if (!organizationId) return;
-    const interval = setInterval(() => void load(organizationId), 15_000);
-    return () => clearInterval(interval);
-  }, [organizationId]);
+  const holds = data?.holds ?? [];
 
   return (
-    <main className="mx-auto max-w-6xl px-6 py-10">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <SectionEyebrow>Organizer workspace</SectionEyebrow>
-          <h1 className="mt-2 font-display text-3xl font-semibold tracking-tight text-[var(--ink)]">Live holds</h1>
-          <p className="mt-2 text-[var(--ink-soft)]">Stalls currently reserved by a visitor while they complete their booking. Refreshes automatically.</p>
-        </div>
-        <select value={organizationId} onChange={(event) => { setOrganizationId(event.target.value); void load(event.target.value); }} className="rounded-md border border-[var(--line-strong)] bg-[var(--paper-raised)] px-3 py-2 text-sm">
-          {organizations.map((organization) => <option key={organization._id} value={organization._id}>{organization.name}</option>)}
-        </select>
+    <main className="mx-auto max-w-6xl px-4 py-10 sm:px-6">
+      <div className="flex flex-col gap-2">
+        <SectionEyebrow>Organizer workspace</SectionEyebrow>
+        <h1 className="font-display text-3xl font-semibold tracking-tight text-[var(--ink)]">Live holds</h1>
+        <p className="text-[var(--ink-soft)]">
+          Stalls a visitor is currently reserving. Each hold releases automatically when its countdown ends.
+        </p>
       </div>
       <DimensionDivider className="mt-6" />
 
-      {error && <p role="alert" className="mt-5 rounded-md border border-[var(--status-booked)] bg-[color-mix(in_srgb,var(--status-booked)_10%,transparent)] p-3 text-sm text-[var(--status-booked)]">{error}</p>}
+      {error && (
+        <Alert variant="destructive" className="mt-6">
+          <AlertTitle>Couldn&apos;t load holds</AlertTitle>
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
+      )}
 
-      <section className="mt-6 overflow-hidden rounded-xl border border-[var(--line)] bg-[var(--paper-raised)]">
-        {loading ? (
-          <div className="p-8 text-[var(--ink-soft)]">Loading holds…</div>
-        ) : holds.length === 0 ? (
-          <div className="p-10 text-center text-[var(--ink-soft)]">No active holds right now — visitors haven&apos;t reserved a stall yet.</div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm">
-              <thead className="border-b border-[var(--line)] text-[var(--ink-soft)]">
-                <tr>
-                  <th className="px-5 py-3">Stall</th>
-                  <th className="px-5 py-3">Exhibition</th>
-                  <th className="px-5 py-3">Price</th>
-                  <th className="px-5 py-3">Held since</th>
-                  <th className="px-5 py-3 text-right">Time left</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-[var(--line)]">
+      {noOrganizations ? (
+        <EmptyState
+          className="mt-8"
+          icon={Building2}
+          title="No organization yet"
+          description="Create an organization to start tracking reservations."
+          action={
+            <Button asChild>
+              <Link href="/dashboard/organizations/new">Create organization</Link>
+            </Button>
+          }
+        />
+      ) : (
+        <Card className="mt-6 overflow-hidden">
+          {loading ? (
+            <div className="space-y-3 p-6">
+              {Array.from({ length: 3 }).map((_, index) => (
+                <Skeleton key={index} className="h-10" />
+              ))}
+            </div>
+          ) : holds.length === 0 ? (
+            <EmptyState
+              className="border-0"
+              icon={Timer}
+              title="No active holds"
+              description="When a visitor reserves a stall, it appears here with the time remaining before it is released."
+            />
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Stall</TableHead>
+                  <TableHead>Exhibition</TableHead>
+                  <TableHead>Value</TableHead>
+                  <TableHead>Held since</TableHead>
+                  <TableHead className="text-right">Time left</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
                 {holds.map((hold) => (
-                  <tr key={hold._id}>
-                    <td className="px-5 py-4 font-mono font-medium text-[var(--ink)]">{hold.stall?.stallNumber ?? "—"}</td>
-                    <td className="px-5 py-4 text-[var(--ink-soft)]">{hold.exhibition?.name ?? "—"}</td>
-                    <td className="px-5 py-4 font-mono tabular">{hold.stall ? `${hold.stall.basePrice.toLocaleString()} ${hold.stall.currency}` : "—"}</td>
-                    <td className="px-5 py-4 text-[var(--ink-soft)]">{new Date(hold.createdAt).toLocaleTimeString()}</td>
-                    <td className="px-5 py-4 text-right"><Countdown expiresAt={hold.expiresAt} /></td>
-                  </tr>
+                  <TableRow key={hold._id}>
+                    <TableCell className="font-mono font-medium text-[var(--ink)]">
+                      {hold.stall?.stallNumber ?? "—"}
+                    </TableCell>
+                    <TableCell>
+                      {hold.exhibition ? (
+                        <Link
+                          href={`/exhibitions/${hold.exhibition.slug}`}
+                          target="_blank"
+                          className="text-[var(--ink)] hover:underline"
+                        >
+                          {hold.exhibition.name}
+                        </Link>
+                      ) : (
+                        <span className="text-[var(--ink-faint)]">—</span>
+                      )}
+                    </TableCell>
+                    <TableCell className="font-mono tabular">
+                      {hold.stall ? `${hold.stall.basePrice.toLocaleString()} ${hold.stall.currency}` : "—"}
+                    </TableCell>
+                    <TableCell className="whitespace-nowrap text-[var(--ink-soft)]">
+                      {new Date(hold.createdAt).toLocaleTimeString()}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <Countdown key={hold.expiresAt} expiresAt={hold.expiresAt} />
+                    </TableCell>
+                  </TableRow>
                 ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </section>
+              </TableBody>
+            </Table>
+          )}
+        </Card>
+      )}
     </main>
   );
 }

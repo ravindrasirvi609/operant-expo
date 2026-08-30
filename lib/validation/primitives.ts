@@ -20,9 +20,12 @@ export const slugField = z
   .regex(SLUG_PATTERN, "Use lowercase letters, numbers and single hyphens only — like spring-expo-2027.");
 
 export const emailField = z
-  .email("Enter a valid email address, like name@company.com.")
+  .string()
   .trim()
-  .max(254, "That email address is too long.");
+  .max(254, "That email address is too long.")
+  // Piped rather than chained: `z.email().trim()` applies the format check first, so a pasted
+  // address with surrounding whitespace was rejected before the trim could rescue it.
+  .pipe(z.email("Enter a valid email address, like name@company.com."));
 
 /** ISO 4217 alphabetic code, normalised to uppercase. */
 export const currencyField = z

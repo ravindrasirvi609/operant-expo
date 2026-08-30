@@ -1,26 +1,49 @@
 "use client";
-import { useState } from "react";
 
-export function PublishMapButton({ organizationId, floorPlanId }: { organizationId: string; floorPlanId: string }) {
-  const [state, setState] = useState<"idle" | "saving" | "done" | "error">("idle");
-  const [message, setMessage] = useState("");
+import * as React from "react";
+import { useRouter } from "next/navigation";
+import { Check, Upload } from "lucide-react";
+import { toast } from "sonner";
+
+import { Button } from "@/components/ui/button";
+import { apiRequest } from "@/lib/http/client";
+
+export function PublishMapButton({
+  organizationId,
+  floorPlanId,
+}: {
+  organizationId: string;
+  floorPlanId: string;
+}) {
+  const router = useRouter();
+  const [publishing, setPublishing] = React.useState(false);
+  const [published, setPublished] = React.useState(false);
+
   async function publish() {
-    setState("saving"); setMessage("");
-    try {
-      const response = await fetch(`/api/organizations/${organizationId}/floor-plans/${floorPlanId}/publish`, { method: "POST" });
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.error ?? "Unable to publish floor plan");
-      setState("done"); setMessage("Published");
-    } catch (error) {
-      setState("error"); setMessage(error instanceof Error ? error.message : "Unable to publish floor plan");
+    setPublishing(true);
+    const result = await apiRequest(
+      `/api/organizations/${organizationId}/floor-plans/${floorPlanId}/publish`,
+      { method: "POST" },
+    );
+    setPublishing(false);
+
+    if (!result.ok) {
+      toast.error(result.error);
+      return;
     }
+
+    setPublished(true);
+    toast.success("Floor plan published.", {
+      description: "Visitors will see this layout once booking is open.",
+    });
+    // The server-rendered page shows the plan status, so refresh rather than leaving it stale.
+    router.refresh();
   }
+
   return (
-    <div className="flex items-center gap-3">
-      <button onClick={() => void publish()} disabled={state === "saving" || state === "done"} className="rounded-md bg-[var(--brand)] px-4 py-2.5 text-sm font-semibold text-[var(--brand-ink)] disabled:opacity-60">
-        {state === "saving" ? "Publishing…" : state === "done" ? "Published ✓" : "Publish map"}
-      </button>
-      {message && <span role={state === "error" ? "alert" : "status"} className={`max-w-xs text-xs ${state === "error" ? "text-[var(--status-booked)]" : "text-[var(--status-available)]"}`}>{message}</span>}
-    </div>
+    <Button onClick={() => void publish()} loading={publishing} disabled={published}>
+      {published ? <Check aria-hidden /> : <Upload aria-hidden />}
+      {published ? "Published" : "Publish map"}
+    </Button>
   );
 }

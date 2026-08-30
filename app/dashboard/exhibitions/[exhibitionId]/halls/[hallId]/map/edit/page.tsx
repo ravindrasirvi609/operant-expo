@@ -2,8 +2,21 @@
 
 import { useEffect, useRef, useState } from "react";
 
+import Link from "next/link";
+import { LayoutTemplate } from "lucide-react";
+import { toast } from "sonner";
+
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { Checkbox } from "@/components/ui/checkbox";
+import { EmptyState } from "@/components/ui/empty-state";
+import { Field } from "@/components/ui/field";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { SectionEyebrow } from "@/components/ui/section-eyebrow";
-import { parseJsonResponse } from "@/lib/http/client";
+import { Skeleton } from "@/components/ui/skeleton";
+import { apiGet, apiRequest } from "@/lib/http/client";
 
 type Geometry = { type: "rect"; x: number; y: number; width: number; height: number; rotation?: number };
 type Element = { _id: string; type: string; label?: string; geometry: Geometry; locked: boolean; visible: boolean; zIndex: number };
@@ -24,6 +37,9 @@ export default function Editor({ params, searchParams }: { params: Promise<{ exh
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
+  // Without this the editor could not tell "the request is in flight" from "there is no plan",
+  // so a hall with no floor plan sat on "Loading map editor..." forever with no way out.
+  const [loadState, setLoadState] = useState<"loading" | "ready" | "missing" | "failed">("loading");
   const [snap, setSnap] = useState(true);
   const drag = useRef<Drag | undefined>(undefined);
   const history = useRef<{ past: Element[][]; future: Element[][] }>({ past: [], future: [] });
@@ -38,14 +54,35 @@ export default function Editor({ params, searchParams }: { params: Promise<{ exh
   useEffect(() => {
     if (!ids?.organizationId) return;
     const load = async () => {
-      const plans = await fetch(`/api/organizations/${ids.organizationId}/exhibitions/${ids.exhibitionId}/halls/${ids.hallId}/floor-plans`).then((r) => r.json());
-      const current = plans.floorPlans?.[0];
-      if (!current) return;
+      setLoadState("loading");
+      const plans = await apiGet<{ floorPlans: Plan[] }>(
+        `/api/organizations/${ids.organizationId}/exhibitions/${ids.exhibitionId}/halls/${ids.hallId}/floor-plans`,
+      );
+      if (!plans.ok) {
+        setError(plans.error);
+        setLoadState("failed");
+        return;
+      }
+
+      const current = plans.data.floorPlans?.[0];
+      if (!current) {
+        setLoadState("missing");
+        return;
+      }
       setPlan(current);
-      const data = await fetch(`/api/organizations/${ids.organizationId}/floor-plans/${current._id}/elements`).then((r) => r.json());
-      setElements(data.elements ?? []);
+
+      const elementResult = await apiGet<{ elements: Element[] }>(
+        `/api/organizations/${ids.organizationId}/floor-plans/${current._id}/elements`,
+      );
+      if (!elementResult.ok) {
+        setError(elementResult.error);
+        setLoadState("failed");
+        return;
+      }
+      setElements(elementResult.data.elements ?? []);
+      setLoadState("ready");
     };
-    void load().catch(() => setError("Unable to load editor"));
+    void load();
   }, [ids]);
 
   function pushHistory() {
@@ -65,11 +102,11 @@ export default function Editor({ params, searchParams }: { params: Promise<{ exh
       const current = elements.find((element) => element._id === targetElement._id);
       if (!current) return;
       if (JSON.stringify(current.geometry) === JSON.stringify(targetElement.geometry) && current.label === targetElement.label) return;
-      await fetch(`/api/organizations/${ids.organizationId}/floor-plans/${plan._id}/elements/${targetElement._id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ geometry: targetElement.geometry, label: targetElement.label }),
-      });
+      const result = await apiRequest(
+        `/api/organizations/${ids.organizationId}/floor-plans/${plan._id}/elements/${targetElement._id}`,
+        { method: "PATCH", json: { geometry: targetElement.geometry, label: targetElement.label } },
+      );
+      if (!result.ok) toast.error(result.error);
     }));
     setElements(target);
     setSaving(false);
@@ -94,10 +131,12 @@ export default function Editor({ params, searchParams }: { params: Promise<{ exh
   async function save(element: Element, patch: Partial<Element>) {
     if (!ids || !plan) return;
     setSaving(true);
-    const r = await fetch(`/api/organizations/${ids.organizationId}/floor-plans/${plan._id}/elements/${element._id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(patch) });
-    const d = await parseJsonResponse<{ error?: string; element?: Element }>(r);
-    if (!r.ok || d.error || !d.element) setError(d.error ?? "Unable to save element");
-    else setElements((all) => all.map((x) => (x._id === element._id ? d.element! : x)));
+    const result = await apiRequest<{ element: Element }>(
+      `/api/organizations/${ids.organizationId}/floor-plans/${plan._id}/elements/${element._id}`,
+      { method: "PATCH", json: patch },
+    );
+    if (!result.ok) toast.error(result.error);
+    else setElements((all) => all.map((x) => (x._id === element._id ? result.data.element : x)));
     setSaving(false);
   }
 
@@ -105,17 +144,35 @@ export default function Editor({ params, searchParams }: { params: Promise<{ exh
     if (!ids || !plan) return;
     const n = elements.length;
     const body = { type: "STALL", label: `Stall ${n + 1}`, status: "AVAILABLE", geometry: { type: "rect", x: 30 + (n % 6) * 120, y: 30 + Math.floor(n / 6) * 120, width: 90, height: 90 }, locked: false, visible: true, zIndex: 1 };
-    const r = await fetch(`/api/organizations/${ids.organizationId}/floor-plans/${plan._id}/elements`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
-    const d = await parseJsonResponse<{ error?: string; element?: Element }>(r);
-    if (!r.ok || d.error || !d.element) setError(d.error ?? "Unable to add stall");
-    else { setElements((all) => [...all, d.element!]); setSelectedIds([d.element!._id]); }
+    const result = await apiRequest<{ element: Element }>(
+      `/api/organizations/${ids.organizationId}/floor-plans/${plan._id}/elements`,
+      { method: "POST", json: body },
+    );
+    if (!result.ok) {
+      toast.error(result.error);
+      return;
+    }
+    setElements((all) => [...all, result.data.element]);
+    setSelectedIds([result.data.element._id]);
   }
 
   async function deleteSelected() {
     if (!ids || !plan || selectedIds.length === 0) return;
     setSaving(true);
-    await Promise.all(selectedIds.map((elementId) => fetch(`/api/organizations/${ids.organizationId}/floor-plans/${plan._id}/elements/${elementId}`, { method: "DELETE" })));
-    setElements((all) => all.filter((element) => !selectedIds.includes(element._id)));
+    const results = await Promise.all(
+      selectedIds.map((elementId) =>
+        apiRequest(`/api/organizations/${ids.organizationId}/floor-plans/${plan._id}/elements/${elementId}`, {
+          method: "DELETE",
+        }),
+      ),
+    );
+    const failed = results.filter((result) => !result.ok);
+    if (failed.length > 0) {
+      // Report the count rather than one message per element, and drop only what really went.
+      toast.error(`Could not delete ${failed.length} of ${results.length} elements.`);
+    }
+    const deletedIds = selectedIds.filter((_, index) => results[index].ok);
+    setElements((all) => all.filter((element) => !deletedIds.includes(element._id)));
     setSelectedIds([]);
     history.current.past = [];
     history.current.future = [];
@@ -225,7 +282,56 @@ export default function Editor({ params, searchParams }: { params: Promise<{ exh
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [elements, selectedIds, plan, snap]);
 
-  if (!ids || !plan) return <main className="mx-auto max-w-6xl px-6 py-12 text-[var(--ink-soft)]">Loading map editor…</main>;
+  if (!ids || loadState === "loading") {
+    return (
+      <main className="mx-auto max-w-7xl px-4 py-10 sm:px-6">
+        <Skeleton className="h-8 w-64" />
+        <Skeleton className="mt-3 h-4 w-96" />
+        <div className="mt-8 grid gap-6 lg:grid-cols-[1fr_280px]">
+          <Skeleton className="h-[60vh]" />
+          <Skeleton className="h-64" />
+        </div>
+      </main>
+    );
+  }
+
+  const setupHref = `/dashboard/exhibitions/${ids.exhibitionId}/halls/${ids.hallId}/map/setup?organizationId=${ids.organizationId}`;
+
+  if (loadState === "missing") {
+    return (
+      <main className="mx-auto max-w-3xl px-4 py-12 sm:px-6">
+        <SectionEyebrow>Map editor</SectionEyebrow>
+        <h1 className="mt-2 font-display text-3xl font-semibold text-[var(--ink)]">No floor plan yet</h1>
+        <EmptyState
+          className="mt-8"
+          icon={LayoutTemplate}
+          title="This hall has no floor plan"
+          description="A floor plan defines the coordinate space stalls are placed in. Create one, then come back here to draw and price the stalls."
+          action={
+            <Button asChild>
+              <Link href={setupHref}>Create floor plan</Link>
+            </Button>
+          }
+        />
+      </main>
+    );
+  }
+
+  if (loadState === "failed" || !plan) {
+    return (
+      <main className="mx-auto max-w-3xl px-4 py-12 sm:px-6">
+        <SectionEyebrow>Map editor</SectionEyebrow>
+        <h1 className="mt-2 font-display text-3xl font-semibold text-[var(--ink)]">Couldn&apos;t open the editor</h1>
+        <Alert variant="destructive" className="mt-6">
+          <AlertTitle>Loading failed</AlertTitle>
+          <AlertDescription>{error || "The floor plan could not be loaded."}</AlertDescription>
+        </Alert>
+        <Button className="mt-6" variant="outline" onClick={() => window.location.reload()}>
+          Try again
+        </Button>
+      </main>
+    );
+  }
 
   return (
     <main className="mx-auto max-w-7xl px-6 py-8">
@@ -236,17 +342,37 @@ export default function Editor({ params, searchParams }: { params: Promise<{ exh
           <p className="mt-1 text-sm text-[var(--ink-soft)]">Drag to move · shift-click to multi-select · handle to resize · top handle to rotate · arrows to nudge · Delete to remove · Ctrl+Z to undo.</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <button onClick={undo} disabled={historyCounts.past === 0} className="rounded-md border border-[var(--line-strong)] px-3 py-2 text-sm font-medium text-[var(--ink)] disabled:opacity-40">Undo</button>
-          <button onClick={redo} disabled={historyCounts.future === 0} className="rounded-md border border-[var(--line-strong)] px-3 py-2 text-sm font-medium text-[var(--ink)] disabled:opacity-40">Redo</button>
-          <label className="flex items-center gap-2 rounded-md border border-[var(--line-strong)] px-3 py-2 text-sm text-[var(--ink)]">
-            <input type="checkbox" checked={snap} onChange={(event) => setSnap(event.target.checked)} /> Snap to grid
-          </label>
-          <button onClick={() => void deleteSelected()} disabled={selectedIds.length === 0} className="rounded-md border border-[var(--status-booked)] px-3 py-2 text-sm font-medium text-[var(--status-booked)] disabled:opacity-40">Delete</button>
-          <button onClick={() => void addStall()} className="rounded-md bg-[var(--brand)] px-4 py-2.5 text-sm font-semibold text-[var(--brand-ink)]">+ Add stall</button>
+          <Button variant="outline" size="sm" onClick={undo} disabled={historyCounts.past === 0}>
+            Undo
+          </Button>
+          <Button variant="outline" size="sm" onClick={redo} disabled={historyCounts.future === 0}>
+            Redo
+          </Button>
+          <Label className="rounded-md border border-[var(--line-strong)] px-3 py-1.5 text-sm">
+            <Checkbox checked={snap} onCheckedChange={(checked) => setSnap(checked === true)} />
+            Snap to grid
+          </Label>
+          <Button
+            variant="destructive"
+            size="sm"
+            onClick={() => void deleteSelected()}
+            disabled={selectedIds.length === 0}
+          >
+            Delete
+          </Button>
+          <Button size="sm" onClick={() => void addStall()}>
+            Add stall
+          </Button>
         </div>
       </div>
-      {error && <p role="alert" className="mt-4 rounded-md border border-[var(--status-booked)] bg-[color-mix(in_srgb,var(--status-booked)_10%,transparent)] p-3 text-sm text-[var(--status-booked)]">{error}</p>}
-      {saving && <p className="mt-2 font-mono text-xs text-[var(--brand-quiet)]">Saving…</p>}
+      {error && (
+        <Alert variant="destructive" className="mt-4">
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
+      )}
+      <p aria-live="polite" className="mt-2 font-mono text-xs text-[var(--brand-quiet)]">
+        {saving ? "Saving…" : " "}
+      </p>
 
       <div className="mt-6 grid gap-6 lg:grid-cols-[1fr_280px]">
         <div className="overflow-auto rounded-xl border border-[var(--line)] bg-[var(--paper)] p-6">
@@ -305,16 +431,23 @@ export default function Editor({ params, searchParams }: { params: Promise<{ exh
           </div>
         </div>
 
-        <aside className="rounded-xl border border-[var(--line)] bg-[var(--paper-raised)] p-5">
+        <Card className="h-fit p-5">
           <h2 className="font-display font-semibold text-[var(--ink)]">Element properties</h2>
           {selectedIds.length > 1 ? (
             <p className="mt-3 text-sm text-[var(--ink-soft)]">{selectedIds.length} elements selected. Drag to move together, or Delete to remove all.</p>
           ) : selected ? (
             <div className="mt-4 space-y-3">
-              <label className="block text-sm text-[var(--ink)]">
-                Label
-                <input value={selected.label ?? ""} onChange={(e) => setElements((all) => all.map((x) => (x._id === selected._id ? { ...x, label: e.target.value } : x)))} onBlur={() => void save(selected, { label: selected.label })} className="mt-1 w-full rounded-md border border-[var(--line-strong)] bg-transparent p-2 text-[var(--ink)]" />
-              </label>
+              <Field label="Label" description="Shown on the stall rectangle and in the inventory picker.">
+                <Input
+                  value={selected.label ?? ""}
+                  onChange={(event) =>
+                    setElements((all) =>
+                      all.map((x) => (x._id === selected._id ? { ...x, label: event.target.value } : x)),
+                    )
+                  }
+                  onBlur={() => void save(selected, { label: selected.label })}
+                />
+              </Field>
               <p className="font-mono text-xs text-[var(--ink-soft)]">Position: {Math.round(selected.geometry.x)}, {Math.round(selected.geometry.y)}</p>
               <p className="font-mono text-xs text-[var(--ink-soft)]">Size: {Math.round(selected.geometry.width)} × {Math.round(selected.geometry.height)}</p>
               <p className="font-mono text-xs text-[var(--ink-soft)]">Rotation: {Math.round(selected.geometry.rotation ?? 0)}°</p>
@@ -322,7 +455,7 @@ export default function Editor({ params, searchParams }: { params: Promise<{ exh
           ) : (
             <p className="mt-3 text-sm text-[var(--ink-soft)]">Select an element to edit it.</p>
           )}
-        </aside>
+        </Card>
       </div>
     </main>
   );

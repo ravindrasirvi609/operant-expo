@@ -14,7 +14,7 @@ import { SectionEyebrow } from "@/components/ui/section-eyebrow";
 import { Skeleton } from "@/components/ui/skeleton";
 import { StatCard } from "@/components/ui/stat-card";
 import { StatusBadge } from "@/components/ui/status-badge";
-import { apiGet } from "@/lib/http/client";
+import { useOrgResource } from "@/lib/ui/use-org-resource";
 
 type Summary = {
   exhibitionCount: number;
@@ -52,35 +52,12 @@ function SummarySkeleton() {
 }
 
 export default function DashboardPage() {
-  const { organizationId, organization, loading: organizationsLoading, error: organizationsError } = useOrganization();
-  const [summary, setSummary] = React.useState<Summary | null>(null);
-  const [loading, setLoading] = React.useState(true);
-  const [error, setError] = React.useState("");
-
-  React.useEffect(() => {
-    if (!organizationId) {
-      // No organization selected yet — either still loading the list, or the user has none.
-      setSummary(null);
-      setLoading(organizationsLoading);
-      return;
-    }
-
-    let cancelled = false;
-    setLoading(true);
-    setError("");
-
-    void apiGet<Summary>(`/api/organizations/${organizationId}/summary`).then((result) => {
-      // A fast organization switch can land two responses out of order; ignore the stale one.
-      if (cancelled) return;
-      if (!result.ok) setError(result.error);
-      else setSummary(result.data);
-      setLoading(false);
-    });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [organizationId, organizationsLoading]);
+  const { organizationId, organization, error: organizationsError } = useOrganization();
+  const {
+    data: summary,
+    loading,
+    error,
+  } = useOrgResource<Summary>(organizationId ? `/api/organizations/${organizationId}/summary` : null);
 
   const stallStatuses = ["AVAILABLE", "HELD", "PENDING", "BOOKED", "BLOCKED"] as const;
 

@@ -3,16 +3,14 @@
 import { useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 
-import { statusColor } from "@/components/ui/status-badge";
+import { Button } from "@/components/ui/button";
+import { PUBLIC_LEGEND_STATUSES, statusColor, statusLabel } from "@/lib/ui/status";
 
 type Element = { _id: string; stallId?: string; type: string; label?: string; status?: string; geometry: { x: number; y: number; width: number; height: number; rotation?: number }; visible: boolean };
 
-const LEGEND: Array<{ status: string; label: string }> = [
-  { status: "AVAILABLE", label: "Available" },
-  { status: "HELD", label: "Held" },
-  { status: "BOOKED", label: "Booked" },
-  { status: "BLOCKED", label: "Blocked" },
-];
+// Drawn from the shared status table rather than a local list, which is how PENDING came to be
+// missing here while still being rendered on the map in the same red as BOOKED.
+const LEGEND = PUBLIC_LEGEND_STATUSES.map((status) => ({ status, label: statusLabel(status) }));
 
 export function MapViewer({ width, height, backgroundUrl, elements, bookingBasePath = "/exhibitions" }: { width: number; height: number; backgroundUrl?: string; elements: Element[]; bookingBasePath?: string }) {
   const [zoom, setZoom] = useState(1);
@@ -52,9 +50,15 @@ export function MapViewer({ width, height, backgroundUrl, elements, bookingBaseP
     <div className="space-y-3">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-wrap items-center gap-2">
-          <button onClick={() => setZoom((value) => Math.min(3, value + 0.2))} className="rounded-md border border-[var(--line-strong)] px-3 py-1.5 text-sm text-[var(--ink)]">Zoom in</button>
-          <button onClick={() => setZoom((value) => Math.max(0.4, value - 0.2))} className="rounded-md border border-[var(--line-strong)] px-3 py-1.5 text-sm text-[var(--ink)]">Zoom out</button>
-          <button onClick={() => setZoom(1)} className="rounded-md border border-[var(--line-strong)] px-3 py-1.5 text-sm text-[var(--ink)]">Reset</button>
+          <Button variant="outline" size="sm" onClick={() => setZoom((value) => Math.min(3, value + 0.2))}>
+            Zoom in
+          </Button>
+          <Button variant="outline" size="sm" onClick={() => setZoom((value) => Math.max(0.4, value - 0.2))}>
+            Zoom out
+          </Button>
+          <Button variant="outline" size="sm" onClick={() => setZoom(1)}>
+            Reset
+          </Button>
           <span className="font-mono text-sm text-[var(--ink-soft)]">{Math.round(zoom * 100)}% · {visible.length} elements</span>
         </div>
         <div className="flex items-center gap-3 font-mono text-xs text-[var(--ink-soft)]">

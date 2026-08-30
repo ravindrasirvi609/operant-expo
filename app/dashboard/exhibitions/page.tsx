@@ -1,205 +1,174 @@
 "use client";
-import { useEffect, useState } from "react";
 
+import * as React from "react";
+import Link from "next/link";
+import { Building2, CalendarRange } from "lucide-react";
+
+import { useOrganization } from "@/components/providers/organization-provider";
+import { CreateExhibitionForm, type Exhibition } from "@/components/exhibitions/create-exhibition-form";
+import { CreateVenueForm, type Venue } from "@/components/exhibitions/create-venue-form";
+import { ExhibitionCard } from "@/components/exhibitions/exhibition-card";
+import { HallManager } from "@/components/exhibitions/hall-manager";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Button } from "@/components/ui/button";
+import { EmptyState } from "@/components/ui/empty-state";
 import { SectionEyebrow } from "@/components/ui/section-eyebrow";
-import { DimensionDivider } from "@/components/ui/dimension-divider";
-import { StatusBadge } from "@/components/ui/status-badge";
-import { EmbedCodePanel } from "@/components/dashboard/embed-code-panel";
-import { parseJsonResponse } from "@/lib/http/client";
+import { Skeleton } from "@/components/ui/skeleton";
+import { useOrgResource } from "@/lib/ui/use-org-resource";
 
-type Org = { _id: string; name: string };
-type Exhibition = { _id: string; name: string; slug: string; lifecycle: string; startDate: string; endDate: string };
-type Hall = { _id: string; name: string; code: string; width: number; height: number };
-type Venue = { _id: string; name: string; city?: string };
+export default function ExhibitionsPage() {
+  const { organizationId, loading: organizationsLoading, can } = useOrganization();
 
-export default function Exhibitions() {
-  const [orgs, setOrgs] = useState<Org[]>([]);
-  const [orgId, setOrgId] = useState("");
-  const [exhibitions, setExhibitions] = useState<Exhibition[]>([]);
-  const [, setVenues] = useState<Venue[]>([]);
-  const [halls, setHalls] = useState<Hall[]>([]);
-  const [selected, setSelected] = useState<Exhibition>();
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState("");
-  const [notice, setNotice] = useState("");
+  // Read separately so a venues failure cannot blank the exhibition list, which is the part of
+  // this screen that actually matters.
+  const exhibitionResource = useOrgResource<{ exhibitions: Exhibition[] }>(
+    organizationId ? `/api/organizations/${organizationId}/exhibitions` : null,
+  );
+  const venueResource = useOrgResource<{ venues: Venue[] }>(
+    organizationId ? `/api/organizations/${organizationId}/venues` : null,
+  );
 
-  async function load(id: string) {
-    if (!id) return;
-    setLoading(true);
-    try {
-      const [a, b] = await Promise.all([fetch(`/api/organizations/${id}/exhibitions`), fetch(`/api/organizations/${id}/venues`)]);
-      const ad = await a.json(), bd = await b.json();
-      if (!a.ok || !b.ok) throw new Error(ad.error ?? bd.error);
-      setExhibitions(ad.exhibitions);
-      setVenues(bd.venues);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Unable to load workspace");
-    } finally {
-      setLoading(false);
+  // Server-loaded exhibitions plus anything created or transitioned in this session, so the list
+  // reflects a lifecycle change immediately without a full re-read.
+  const [overrides, setOverrides] = React.useState<Exhibition[]>([]);
+  const [selectedId, setSelectedId] = React.useState("");
+
+  const loading = exhibitionResource.loading;
+  const error = exhibitionResource.error || venueResource.error;
+  const venues = venueResource.data?.venues ?? [];
+
+  const exhibitions = React.useMemo(() => {
+    const loaded = exhibitionResource.data?.exhibitions ?? [];
+    const byId = new Map(loaded.map((exhibition) => [exhibition._id, exhibition]));
+    const created: Exhibition[] = [];
+    for (const override of overrides) {
+      if (byId.has(override._id)) byId.set(override._id, override);
+      else created.push(override);
     }
-  }
+    return [...created, ...Array.from(byId.values())];
+  }, [exhibitionResource.data, overrides]);
 
-  useEffect(() => {
-    fetch("/api/me/organizations").then((r) => r.json()).then((d) => {
-      setOrgs(d.organizations ?? []);
-      if (d.organizations?.[0]) { setOrgId(d.organizations[0]._id); void load(d.organizations[0]._id); }
-      else setLoading(false);
-    }).catch(() => setError("Unable to load organizations"));
-  }, []);
+  const canManage = can("exhibition:manage");
 
-  async function select(e: Exhibition) {
-    setSelected(e);
-    const r = await fetch(`/api/organizations/${orgId}/exhibitions/${e._id}/halls`);
-    const d = await r.json();
-    if (r.ok) setHalls(d.halls);
-    else setError(d.error);
-  }
+  const selected = exhibitions.find((exhibition) => exhibition._id === selectedId) ?? null;
 
-  async function lifecycle(e: Exhibition, next: string) {
-    if (!orgId) return;
-    setSaving(true); setError(""); setNotice("");
-    const r = await fetch(`/api/organizations/${orgId}/exhibitions/${e._id}/lifecycle`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ lifecycle: next }) });
-    const d = await parseJsonResponse<{ error?: string; exhibition?: Exhibition }>(r);
-    const updated = d.exhibition;
-    if (!r.ok || d.error || !updated) setError(d.error ?? "Unable to update status");
-    else {
-      setExhibitions((c) => c.map((x) => (x._id === e._id ? updated : x)));
-      if (selected?._id === e._id) setSelected(updated);
-      setNotice(`${e.name} is now ${next.toLowerCase().replace("_", " ")}.`);
-    }
-    setSaving(false);
-  }
-
-  async function submit(event: React.FormEvent<HTMLFormElement>, path: string, done: (d: Record<string, unknown>) => void) {
-    event.preventDefault();
-    // Capture the form before the first await — React's SyntheticEvent's currentTarget goes
-    // null once the DOM event finishes dispatching, which happens well before an async handler
-    // resumes after its first await.
-    const form = event.currentTarget;
-    setSaving(true); setError("");
-    try {
-      const r = await fetch(path, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(Object.fromEntries(new FormData(form))) });
-      const d = await parseJsonResponse(r);
-      if (!r.ok || d.error) throw new Error(d.error ?? "Request failed");
-      done(d);
-      form.reset();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Request failed");
-    } finally {
-      setSaving(false);
-    }
+  function upsert(exhibition: Exhibition) {
+    setOverrides((current) => [
+      exhibition,
+      ...current.filter((item) => item._id !== exhibition._id),
+    ]);
   }
 
   return (
-    <main className="mx-auto max-w-7xl px-6 py-10">
-      <div className="flex flex-col gap-5 border-b border-[var(--line)] pb-8 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <SectionEyebrow>Organizer workspace</SectionEyebrow>
-          <h1 className="mt-2 font-display text-4xl font-semibold tracking-tight text-[var(--ink)]">Exhibitions</h1>
-          <p className="mt-3 text-[var(--ink-soft)]">Create events, publish them, and open your stall booking experience.</p>
-        </div>
-        <select value={orgId} onChange={(e) => { setOrgId(e.target.value); void load(e.target.value); }} className="rounded-md border border-[var(--line-strong)] bg-[var(--paper-raised)] px-4 py-3 text-sm">
-          {orgs.map((o) => <option key={o._id} value={o._id}>{o.name}</option>)}
-        </select>
+    <main className="mx-auto max-w-7xl px-4 py-10 sm:px-6">
+      <div className="flex flex-col gap-2 border-b border-[var(--line)] pb-8">
+        <SectionEyebrow>Organizer workspace</SectionEyebrow>
+        <h1 className="font-display text-3xl font-semibold tracking-tight text-[var(--ink)] sm:text-4xl">
+          Exhibitions
+        </h1>
+        <p className="max-w-2xl text-[var(--ink-soft)]">
+          Create an event, add its halls, design each floor plan, then publish and open booking. Visitors can only
+          reserve stalls once booking is open on a published plan.
+        </p>
       </div>
-      {error && <p role="alert" className="mt-5 rounded-md border border-[var(--status-booked)] bg-[color-mix(in_srgb,var(--status-booked)_10%,transparent)] p-4 text-sm text-[var(--status-booked)]">{error}</p>}
-      {notice && <p role="status" className="mt-5 rounded-md border border-[var(--status-available)] bg-[color-mix(in_srgb,var(--status-available)_10%,transparent)] p-4 text-sm text-[var(--status-available)]">{notice}</p>}
-      {loading ? (
-        <p className="mt-8 text-[var(--ink-soft)]">Loading exhibitions…</p>
+
+      {error && (
+        <Alert variant="destructive" className="mt-6">
+          <AlertTitle>Couldn&apos;t load everything</AlertTitle>
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
+      )}
+
+      {!organizationId && !organizationsLoading ? (
+        <EmptyState
+          className="mt-8"
+          icon={Building2}
+          title="No organization yet"
+          description="Exhibitions live inside an organization. Create one to get started."
+          action={
+            <Button asChild>
+              <Link href="/dashboard/organizations/new">Create organization</Link>
+            </Button>
+          }
+        />
       ) : (
-        <div className="mt-8 grid gap-8 xl:grid-cols-[1fr_360px]">
+        <div className="mt-8 grid gap-8 xl:grid-cols-[1fr_380px]">
           <section>
-            <div className="mb-4 flex items-center justify-between">
+            <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
               <div>
                 <h2 className="font-display text-xl font-semibold text-[var(--ink)]">Your exhibitions</h2>
-                <p className="mt-1 text-sm text-[var(--ink-soft)]">Manage publication and booking availability.</p>
+                <p className="mt-1 text-sm text-[var(--ink-soft)]">
+                  Select one to manage its halls and floor plans.
+                </p>
               </div>
-              <span className="rounded-full border border-[var(--line-strong)] px-3 py-1 font-mono text-xs text-[var(--ink-soft)]">{exhibitions.length} total</span>
+              <span className="rounded-full border border-[var(--line-strong)] px-3 py-1 font-mono text-xs text-[var(--ink-soft)]">
+                {exhibitions.length} total
+              </span>
             </div>
-            {exhibitions.length === 0 ? (
-              <div className="rounded-2xl border border-dashed border-[var(--line-strong)] p-12 text-center text-[var(--ink-soft)]">No exhibitions yet. Create one from the panel.</div>
+
+            {loading ? (
+              <div className="space-y-3">
+                {Array.from({ length: 3 }).map((_, index) => (
+                  <Skeleton key={index} className="h-40" />
+                ))}
+              </div>
+            ) : exhibitions.length === 0 ? (
+              <EmptyState
+                icon={CalendarRange}
+                title="No exhibitions yet"
+                description="Create your first exhibition from the panel on the right. It starts as a private draft."
+              />
             ) : (
               <div className="space-y-3">
-                {exhibitions.map((e) => (
-                  <div key={e._id} className={`corner-marks rounded-2xl border bg-[var(--paper-raised)] p-5 shadow-sm ${selected?._id === e._id ? "border-[var(--brand)]" : "border-[var(--line)]"}`} data-active={selected?._id === e._id}>
-                    <button onClick={() => void select(e)} className="w-full text-left">
-                      <div className="flex items-start justify-between gap-4">
-                        <div>
-                          <h3 className="font-display text-lg font-semibold text-[var(--ink)]">{e.name}</h3>
-                          <p className="mt-1 font-mono text-sm text-[var(--ink-soft)]">/{e.slug}</p>
-                        </div>
-                        <StatusBadge status={e.lifecycle} />
-                      </div>
-                      <p className="mt-4 font-mono text-sm text-[var(--ink-soft)]">{new Date(e.startDate).toLocaleDateString()} – {new Date(e.endDate).toLocaleDateString()}</p>
-                    </button>
-                    <div className="mt-5 flex flex-wrap gap-2 border-t border-[var(--line)] pt-4">
-                      {e.lifecycle === "DRAFT" && <button disabled={saving} onClick={() => void lifecycle(e, "PUBLISHED")} className="rounded-md bg-[var(--brand)] px-3 py-2 text-xs font-semibold text-[var(--brand-ink)] disabled:opacity-50">Publish exhibition</button>}
-                      {e.lifecycle === "PUBLISHED" && <button disabled={saving} onClick={() => void lifecycle(e, "BOOKING_OPEN")} className="rounded-md bg-[var(--status-available)] px-3 py-2 text-xs font-semibold text-white disabled:opacity-50">Open booking</button>}
-                      {e.lifecycle === "BOOKING_OPEN" && <button disabled={saving} onClick={() => void lifecycle(e, "BOOKING_CLOSED")} className="rounded-md bg-[var(--status-held)] px-3 py-2 text-xs font-semibold text-[var(--brand-ink)] disabled:opacity-50">Close booking</button>}
-                      {["PUBLISHED", "BOOKING_OPEN", "BOOKING_CLOSED"].includes(e.lifecycle) && <a href={`/exhibitions/${e.slug}`} target="_blank" className="rounded-md border border-[var(--line-strong)] px-3 py-2 text-xs font-semibold text-[var(--ink)]">View public page ↗</a>}
-                    </div>
-                    {["PUBLISHED", "BOOKING_OPEN", "BOOKING_CLOSED"].includes(e.lifecycle) && (
-                      <div className="mt-3 border-t border-[var(--line)] pt-3">
-                        <EmbedCodePanel slug={e.slug} name={e.name} />
-                      </div>
-                    )}
-                  </div>
+                {exhibitions.map((exhibition) => (
+                  <ExhibitionCard
+                    key={exhibition._id}
+                    exhibition={exhibition}
+                    organizationId={organizationId}
+                    selected={selectedId === exhibition._id}
+                    canManage={canManage}
+                    onSelect={() => setSelectedId((current) => (current === exhibition._id ? "" : exhibition._id))}
+                    onUpdated={upsert}
+                  />
                 ))}
               </div>
             )}
+
             {selected && (
-              <div className="corner-marks mt-8 rounded-2xl border border-[var(--line)] bg-[var(--paper-raised)] p-6 shadow-sm">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="font-mono text-xs uppercase tracking-widest text-[var(--brand-quiet)]">Hall setup</p>
-                    <h2 className="mt-1 font-display text-xl font-semibold text-[var(--ink)]">{selected.name}</h2>
-                  </div>
-                  <span className="text-sm text-[var(--ink-soft)]">{halls.length} halls</span>
-                </div>
-                {halls.map((h) => (
-                  <div key={h._id} className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[var(--line)] p-4">
-                    <span className="text-sm font-medium text-[var(--ink)]">{h.name} <span className="font-mono text-[var(--ink-faint)]">· {h.code}</span></span>
-                    <div className="flex gap-2">
-                      <a className="rounded-md bg-[var(--brand)] px-3 py-2 text-xs font-semibold text-[var(--brand-ink)]" href={`/dashboard/exhibitions/${selected._id}/halls/${h._id}/map/setup?organizationId=${orgId}`}>Upload map</a>
-                      <a className="rounded-md border border-[var(--line-strong)] px-3 py-2 text-xs font-semibold text-[var(--ink)]" href={`/dashboard/exhibitions/${selected._id}/halls/${h._id}/map?organizationId=${orgId}`}>View map</a>
-                    </div>
-                  </div>
-                ))}
-                <DimensionDivider className="mt-6" />
-                <form className="mt-6 grid gap-3 sm:grid-cols-2" onSubmit={(e) => void submit(e, `/api/organizations/${orgId}/exhibitions/${selected._id}/halls`, (d) => setHalls((c) => [...c, d.hall as Hall]))}>
-                  <input name="name" required placeholder="Hall name" className="rounded-md border border-[var(--line-strong)] bg-transparent p-3" />
-                  <input name="code" required placeholder="Hall code" className="rounded-md border border-[var(--line-strong)] bg-transparent p-3" />
-                  <input name="width" required type="number" min="1" placeholder="Width" className="rounded-md border border-[var(--line-strong)] bg-transparent p-3" />
-                  <input name="height" required type="number" min="1" placeholder="Height" className="rounded-md border border-[var(--line-strong)] bg-transparent p-3" />
-                  <button className="rounded-md bg-[var(--ink)] p-3 text-sm font-semibold text-[var(--paper)] sm:col-span-2">Add hall</button>
-                </form>
-              </div>
+              <HallManager
+                key={selected._id}
+                organizationId={organizationId}
+                exhibitionId={selected._id}
+                exhibitionName={selected.name}
+              />
             )}
           </section>
+
           <aside className="space-y-5">
-            <Form title="Add venue" subtitle="Add the location for your event." onSubmit={(e) => void submit(e, `/api/organizations/${orgId}/venues`, (d) => setVenues((c) => [...c, d.venue as Venue]))} fields={["name", "city", "country"]} button="Create venue" />
-            <Form title="Create exhibition" subtitle="Start with the essentials; refine it later." onSubmit={(e) => void submit(e, `/api/organizations/${orgId}/exhibitions`, (d) => setExhibitions((c) => [d.exhibition as Exhibition, ...c]))} fields={["name", "slug", "shortDescription", "startDate", "endDate", "timezone"]} button="Create exhibition" />
+            {canManage ? (
+              <>
+                <CreateExhibitionForm
+                  organizationId={organizationId}
+                  venues={venues}
+                  onCreated={(exhibition) => {
+                    upsert(exhibition);
+                    setSelectedId(exhibition._id);
+                  }}
+                />
+                <CreateVenueForm organizationId={organizationId} onCreated={() => void venueResource.reload()} />
+              </>
+            ) : (
+              <Alert variant="info">
+                <AlertTitle>Read-only access</AlertTitle>
+                <AlertDescription>
+                  Your role can view exhibitions but not create or publish them. Ask an organization owner or admin for
+                  access.
+                </AlertDescription>
+              </Alert>
+            )}
           </aside>
         </div>
       )}
     </main>
-  );
-}
-
-function Form({ title, subtitle, fields, onSubmit, button }: { title: string; subtitle: string; fields: string[]; onSubmit: (e: React.FormEvent<HTMLFormElement>) => void; button: string }) {
-  return (
-    <form onSubmit={onSubmit} className="corner-marks space-y-3 rounded-2xl border border-[var(--line)] bg-[var(--paper-raised)] p-6 shadow-sm">
-      <h2 className="font-display font-semibold text-[var(--ink)]">{title}</h2>
-      <p className="text-sm text-[var(--ink-soft)]">{subtitle}</p>
-      {fields.map((f) =>
-        f === "shortDescription" ? (
-          <textarea key={f} name={f} placeholder="Short description" className="w-full rounded-md border border-[var(--line-strong)] bg-transparent p-3" />
-        ) : (
-          <input key={f} name={f} required={!["city", "country", "shortDescription"].includes(f)} type={f.includes("Date") ? "date" : "text"} defaultValue={f === "timezone" ? "Asia/Kolkata" : undefined} placeholder={f.replace(/([A-Z])/g, " $1")} className="w-full rounded-md border border-[var(--line-strong)] bg-transparent p-3" />
-        ),
-      )}
-      <button className="w-full rounded-md bg-[var(--brand)] p-3 text-sm font-semibold text-[var(--brand-ink)]">{button}</button>
-    </form>
   );
 }

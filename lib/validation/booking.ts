@@ -1,5 +1,20 @@
 import { z } from "zod";
 
-export const exhibitorSchema = z.object({ companyName: z.string().trim().min(2).max(160), legalName: z.string().trim().max(160).optional(), contactPerson: z.string().trim().min(2).max(120), email: z.string().trim().email(), phone: z.string().trim().max(40).optional(), address: z.string().trim().max(300).optional(), taxIdentifier: z.string().trim().max(80).optional() });
-export const bookingSchema = exhibitorSchema.extend({ stallId: z.string().min(1) });
+import { emailField, optionalText, requiredText } from "@/lib/validation/primitives";
 
+export const exhibitorSchema = z.object({
+  companyName: requiredText("Company name", { min: 2, max: 160 }),
+  legalName: optionalText("Legal name", 160),
+  contactPerson: requiredText("Contact person", { min: 2, max: 120 }),
+  email: emailField,
+  phone: optionalText("Phone", 40),
+  address: optionalText("Address", 300),
+  taxIdentifier: optionalText("Tax identifier", 80),
+});
+
+export const bookingSchema = exhibitorSchema.extend({
+  stallId: z.string().trim().min(1, "A stall must be selected."),
+});
+
+export type ExhibitorInput = z.input<typeof exhibitorSchema>;
+export type BookingInput = z.input<typeof bookingSchema>;

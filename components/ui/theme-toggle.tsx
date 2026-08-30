@@ -19,19 +19,17 @@ const OPTIONS = [
 ] as const;
 
 export function ThemeToggle() {
+  // next-themes leaves `theme` undefined until it has read the stored preference on the client,
+  // which is exactly the signal needed here: server and first client render both fall back to
+  // the system icon, so there is nothing to reconcile and no mounted flag to track.
   const { theme, setTheme } = useTheme();
-  // The server can't know the resolved theme, so render a stable icon until mounted rather than
-  // guessing and causing a hydration mismatch.
-  const [mounted, setMounted] = React.useState(false);
-  React.useEffect(() => setMounted(true), []);
-
-  const active = OPTIONS.find((option) => option.value === theme) ?? OPTIONS[2];
-  const Icon = mounted ? active.icon : Monitor;
+  const active = OPTIONS.find((option) => option.value === theme);
+  const Icon = active?.icon ?? Monitor;
 
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button variant="ghost" size="iconSm" aria-label={`Theme: ${mounted ? active.label : "system"}`}>
+        <Button variant="ghost" size="iconSm" aria-label={`Theme: ${active?.label ?? "system"}`}>
           <Icon className="size-4" aria-hidden />
         </Button>
       </DropdownMenuTrigger>
@@ -40,9 +38,7 @@ export function ThemeToggle() {
           <DropdownMenuItem key={option.value} onSelect={() => setTheme(option.value)}>
             <option.icon aria-hidden />
             {option.label}
-            {mounted && theme === option.value && (
-              <span className="ml-auto text-xs text-[var(--brand-quiet)]">active</span>
-            )}
+            {theme === option.value && <span className="ml-auto text-xs text-[var(--brand-quiet)]">active</span>}
           </DropdownMenuItem>
         ))}
       </DropdownMenuContent>
