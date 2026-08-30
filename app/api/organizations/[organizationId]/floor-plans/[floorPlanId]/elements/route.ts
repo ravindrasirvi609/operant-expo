@@ -1,36 +1,69 @@
-import { NextResponse } from "next/server";
 import { ObjectId } from "mongodb";
 
-import { requireApiPermission } from "@/lib/auth/authorization";
-import { getDatabase } from "@/lib/db/client";
+import { fitsInCanvas } from "@/lib/floor-plans/geometry";
+import { floorPlanErrorResponse, loadPlan } from "@/lib/floor-plans/route-context";
 import { readBody } from "@/lib/http/body";
-import { mapElementSchema } from "@/lib/validation/map";
-import type { FloorPlanDocument, MapElementDocument } from "@/models/map";
-import { badRequest } from "@/lib/http/responses";
+import { badRequest, created, ok } from "@/lib/http/responses";
+import { nonStallElementSchema } from "@/lib/validation/floor-plan";
+import type { MapElementDocument } from "@/models/map";
 
-export async function GET(_: Request, { params }: { params: Promise<{ organizationId: string; floorPlanId: string }> }) {
-  const { organizationId, floorPlanId } = await params;
-  const auth = await requireApiPermission(organizationId, "exhibition:view");
-  if (!auth.ok) return auth.response;
-  if (!ObjectId.isValid(floorPlanId)) return NextResponse.json({ error: "Invalid floor plan" }, { status: 400 });
-  const elements = await (await getDatabase()).collection<MapElementDocument>("mapElements").find({ organizationId: new ObjectId(organizationId), floorPlanId: new ObjectId(floorPlanId) }).sort({ zIndex: 1 }).toArray();
-  return NextResponse.json({ elements });
+type RouteParams = { params: Promise<{ organizationId: string; floorPlanId: string }> };
+
+export async function GET(_: Request, { params }: RouteParams) {
+  try {
+    const { organizationId, floorPlanId } = await params;
+    const loaded = await loadPlan(organizationId, floorPlanId, "exhibition:view");
+    if ("response" in loaded) return loaded.response;
+
+    const elements = await loaded.database
+      .collection<MapElementDocument>("mapElements")
+      .find({ floorPlanId: loaded.plan._id! })
+      .sort({ zIndex: 1 })
+      .toArray();
+
+    return ok({ elements });
+  } catch (cause) {
+    return floorPlanErrorResponse(cause, "GET .../floor-plans/[floorPlanId]/elements");
+  }
 }
 
-export async function POST(request: Request, { params }: { params: Promise<{ organizationId: string; floorPlanId: string }> }) {
-  const { organizationId, floorPlanId } = await params;
-  const auth = await requireApiPermission(organizationId, "map:edit");
-  if (!auth.ok) return auth.response;
-  if (!ObjectId.isValid(floorPlanId)) return NextResponse.json({ error: "Invalid floor plan" }, { status: 400 });
-  const database = await getDatabase();
-  const plan = await database.collection<FloorPlanDocument>("floorPlans").findOne({ _id: new ObjectId(floorPlanId), organizationId: new ObjectId(organizationId) });
-  if (!plan) return NextResponse.json({ error: "Floor plan not found" }, { status: 404 });
-  const parsed = mapElementSchema.safeParse(await readBody(request));
-  if (!parsed.success) return badRequest(parsed.error, "Check the element's position and size.");
-  const { geometry } = parsed.data;
-  if (geometry.x + geometry.width > plan.canvasWidth || geometry.y + geometry.height > plan.canvasHeight) return NextResponse.json({ error: "Element must fit inside the floor plan canvas" }, { status: 400 });
-  const now = new Date();
-  const element: MapElementDocument = { _id: new ObjectId(), organizationId: new ObjectId(organizationId), exhibitionId: plan.exhibitionId, hallId: plan.hallId, floorPlanId: plan._id!, ...parsed.data, createdAt: now, updatedAt: now };
-  await database.collection<MapElementDocument>("mapElements").insertOne(element);
-  return NextResponse.json({ element }, { status: 201 });
+/**
+ * Adds a non-stall element: an entrance, exit, zone, stage or walkway.
+ *
+ * Stalls go through .../stalls instead, which creates the bookable record alongside the rectangle.
+ * This endpoint used to accept type STALL too, which is exactly how unbookable rectangles were
+ * created — so it now rejects that with a pointer to the right endpoint.
+ */
+export async function POST(request: Request, { params }: RouteParams) {
+  try {
+    const { organizationId, floorPlanId } = await params;
+    const loaded = await loadPlan(organizationId, floorPlanId, "map:edit");
+    if ("response" in loaded) return loaded.response;
+
+    const parsed = nonStallElementSchema.safeParse(await readBody(request));
+    if (!parsed.success) return badRequest(parsed.error, "Check the element details.");
+
+    if (!fitsInCanvas(parsed.data.geometry, loaded.plan)) {
+      return badRequest(
+        `That position falls outside the ${loaded.plan.canvasWidth} x ${loaded.plan.canvasHeight} canvas.`,
+      );
+    }
+
+    const now = new Date();
+    const element: MapElementDocument = {
+      _id: new ObjectId(),
+      organizationId: loaded.organizationId,
+      exhibitionId: loaded.plan.exhibitionId,
+      hallId: loaded.plan.hallId,
+      floorPlanId: loaded.plan._id!,
+      ...parsed.data,
+      createdAt: now,
+      updatedAt: now,
+    };
+
+    await loaded.database.collection<MapElementDocument>("mapElements").insertOne(element);
+    return created({ element });
+  } catch (cause) {
+    return floorPlanErrorResponse(cause, "POST .../floor-plans/[floorPlanId]/elements");
+  }
 }
