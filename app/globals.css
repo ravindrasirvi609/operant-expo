@@ -1,91 +1,190 @@
 @import "tailwindcss";
+@import "tw-animate-css";
 
+/* Class-based dark mode. next-themes toggles `.dark` on <html>, including for the
+   "system" setting, so this variant is the single switch for the whole app. */
+@custom-variant dark (&:is(.dark *));
+
+/* ---------------------------------------------------------------------------
+   Blueprint source palette.
+
+   These are the raw brand values — warm drafting paper, deep navy ink, an amber
+   accent, and hairline rules. Semantic tokens below are derived from these, so a
+   palette change happens in exactly one place.
+   --------------------------------------------------------------------------- */
 :root {
   --paper: #f7f5ef;
   --paper-raised: #ffffff;
+  --paper-sunken: #eeebe2;
   --ink: #142b42;
   --ink-soft: #4c6178;
   --ink-faint: #7c8ba0;
-  --accent: #e2963c;
-  --accent-ink: #7a4a12;
+  --brand: #e2963c;
+  --brand-ink: #3d2408;
+  --brand-quiet: #7a4a12;
   --line: #d9dee6;
   --line-strong: #b9c3d1;
-  --available: #2f9e6e;
-  --held: #e2963c;
-  --booked: #c1502e;
-  --blocked: #8a94a6;
-  --pending: #c1502e;
+
+  /* Availability palette. `--status-*` is the fill/marker colour; `--status-*-ink`
+     is the text-on-paper variant, darkened to clear WCAG AA at small sizes.
+     PENDING gets its own hue (blue = in progress) rather than sharing BOOKED's
+     red, so "someone is paying for this" reads differently from "sold". */
+  --status-available: #2f9e6e;
+  --status-available-ink: #1d7a52;
+  --status-held: #d98722;
+  --status-held-ink: #8a5209;
+  --status-pending: #3f7fb3;
+  --status-pending-ink: #1f5f8f;
+  --status-booked: #c1502e;
+  --status-booked-ink: #a83c1c;
+  --status-blocked: #8a94a6;
+  --status-blocked-ink: #5c687a;
+
+  /* Semantic (shadcn) tokens */
   --background: var(--paper);
   --foreground: var(--ink);
+  --card: var(--paper-raised);
+  --card-foreground: var(--ink);
+  --popover: var(--paper-raised);
+  --popover-foreground: var(--ink);
+  --primary: var(--brand);
+  --primary-foreground: var(--brand-ink);
+  --secondary: var(--paper-sunken);
+  --secondary-foreground: var(--ink);
+  --muted: var(--paper-sunken);
+  --muted-foreground: var(--ink-soft);
+  --accent: var(--paper-sunken);
+  --accent-foreground: var(--ink);
+  --destructive: var(--status-booked);
+  --destructive-foreground: #ffffff;
+  --success: var(--status-available);
+  --success-foreground: #ffffff;
+  --border: var(--line);
+  --input: var(--line-strong);
+  --ring: var(--brand);
+  --radius: 0.5rem;
+
   color-scheme: light;
+}
+
+.dark {
+  --paper: #0e1a26;
+  --paper-raised: #14222f;
+  --paper-sunken: #1b2b3b;
+  --ink: #e8edf3;
+  --ink-soft: #9fb0c3;
+  --ink-faint: #6c7f94;
+  --brand: #f0ac52;
+  --brand-ink: #2a1a05;
+  --brand-quiet: #f0ac52;
+  --line: #26374a;
+  --line-strong: #33465c;
+
+  --status-available: #3fbe84;
+  --status-available-ink: #4ecf93;
+  --status-held: #f0ac52;
+  --status-held-ink: #f0b45f;
+  --status-pending: #4f97cc;
+  --status-pending-ink: #6fb2e0;
+  --status-booked: #e2694a;
+  --status-booked-ink: #f08469;
+  --status-blocked: #5b6b7f;
+  --status-blocked-ink: #90a0b4;
+
+  --destructive-foreground: #1a0d08;
+  --success-foreground: #06231a;
+
+  color-scheme: dark;
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  /* Brand-named aliases so blueprint intent stays legible in markup. */
   --color-paper: var(--paper);
   --color-paper-raised: var(--paper-raised);
+  --color-paper-sunken: var(--paper-sunken);
   --color-ink: var(--ink);
   --color-ink-soft: var(--ink-soft);
-  --color-accent: var(--accent);
+  --color-ink-faint: var(--ink-faint);
+  --color-brand: var(--brand);
+  --color-brand-ink: var(--brand-ink);
+  --color-brand-quiet: var(--brand-quiet);
   --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
+
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --radius-2xl: calc(var(--radius) + 8px);
+
   --font-sans: var(--font-inter);
   --font-display: var(--font-space-grotesk);
   --font-mono: var(--font-plex-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --paper: #0e1a26;
-    --paper-raised: #14222f;
-    --ink: #e8edf3;
-    --ink-soft: #9fb0c3;
-    --ink-faint: #6c7f94;
-    --accent: #f0ac52;
-    --accent-ink: #2a1a05;
-    --line: #26374a;
-    --line-strong: #33465c;
-    --available: #3fbe84;
-    --held: #f0ac52;
-    --booked: #e2694a;
-    --blocked: #5b6b7f;
-    --pending: #e2694a;
-    --background: var(--paper);
-    --foreground: var(--ink);
-    color-scheme: dark;
+@layer base {
+  * {
+    border-color: var(--border);
   }
 
-  .bg-white { background-color: var(--paper-raised); }
-  .bg-zinc-50 { background-color: var(--paper); }
-  .bg-zinc-100 { background-color: #1c2c3d; }
-  .bg-zinc-900 { background-color: var(--ink); color: var(--paper-raised); }
-  .text-black, .text-zinc-950 { color: var(--ink); }
-  .text-zinc-600 { color: var(--ink-soft); }
-  .text-zinc-500 { color: var(--ink-soft); }
-  .text-zinc-400 { color: var(--ink-faint); }
-  .border-zinc-200, .border-zinc-300 { border-color: var(--line); }
-  .border-dashed { border-color: var(--line-strong); }
-  input, textarea, select { background-color: var(--paper-raised); color: var(--ink); border-color: var(--line-strong); }
-  input::placeholder, textarea::placeholder { color: var(--ink-faint); }
-  option { background-color: var(--paper-raised); color: var(--ink); }
-  .shadow-sm { --tw-shadow-color: rgb(0 0 0 / 0.5); }
+  body {
+    background: var(--background);
+    color: var(--foreground);
+    font-family: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  }
+
+  h1,
+  h2,
+  h3,
+  .font-display {
+    font-family: var(--font-space-grotesk), var(--font-inter), sans-serif;
+  }
+
+  .font-mono,
+  .tabular {
+    font-family: var(--font-plex-mono), ui-monospace, monospace;
+  }
+
+  .tabular {
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* A visible focus ring everywhere, keyboard-only. Previously several
+     interactive elements had `focus:outline-none` with no replacement. */
+  :focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+  }
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: var(--font-sans), Arial, Helvetica, sans-serif;
-}
+/* ---------------------------------------------------------------------------
+   Signature marks. These three are the app's visual identity and are deliberately
+   hand-written rather than generated by a component library.
+   --------------------------------------------------------------------------- */
 
-h1, h2, h3, .font-display {
-  font-family: var(--font-display), var(--font-sans), sans-serif;
-}
-
-.font-mono, .tabular {
-  font-family: var(--font-mono), ui-monospace, monospace;
-}
-
-/* Signature: faint blueprint grid-paper texture. Applied sparingly (hero/backdrops only). */
+/* Faint blueprint grid-paper texture. Applied sparingly — hero and canvas backdrops. */
 .bg-blueprint-grid {
   background-image:
     linear-gradient(var(--line) 1px, transparent 1px),
@@ -94,45 +193,47 @@ h1, h2, h3, .font-display {
   background-position: -1px -1px;
 }
 
-@media (prefers-color-scheme: dark) {
-  .bg-blueprint-grid { opacity: 0.9; }
-}
-
-/* Signature: drafting corner-registration marks, shown on focus/selected/hover state. */
+/* Drafting corner-registration marks, revealed on hover or active state. */
 .corner-marks {
   position: relative;
 }
+
 .corner-marks::before,
 .corner-marks::after {
   content: "";
   position: absolute;
   width: 14px;
   height: 14px;
-  border: 1.5px solid var(--accent);
+  border: 1.5px solid var(--brand);
   opacity: 0;
   transition: opacity 150ms ease;
   pointer-events: none;
 }
+
 .corner-marks::before {
   top: -6px;
   left: -6px;
   border-right: none;
   border-bottom: none;
 }
+
 .corner-marks::after {
   bottom: -6px;
   right: -6px;
   border-left: none;
   border-top: none;
 }
+
 .corner-marks:hover::before,
 .corner-marks:hover::after,
+.corner-marks:focus-within::before,
+.corner-marks:focus-within::after,
 .corner-marks[data-active="true"]::before,
 .corner-marks[data-active="true"]::after {
   opacity: 1;
 }
 
-/* Signature: dimension-tick divider — a hairline rule with short perpendicular ticks at each end,
+/* Dimension-tick divider — a hairline with short perpendicular ticks at each end,
    evoking an architectural dimension line, in place of a plain <hr>. */
 .dimension-divider {
   position: relative;
@@ -140,6 +241,7 @@ h1, h2, h3, .font-display {
   background: var(--line);
   margin: 0;
 }
+
 .dimension-divider::before,
 .dimension-divider::after {
   content: "";
@@ -149,5 +251,11 @@ h1, h2, h3, .font-display {
   height: 9px;
   background: var(--line-strong);
 }
-.dimension-divider::before { left: 0; }
-.dimension-divider::after { right: 0; }
+
+.dimension-divider::before {
+  left: 0;
+}
+
+.dimension-divider::after {
+  right: 0;
+}

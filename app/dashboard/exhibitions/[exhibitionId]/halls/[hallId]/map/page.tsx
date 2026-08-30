@@ -23,7 +23,7 @@ export default async function MapPage({ params, searchParams }: { params: Promis
       <main className="mx-auto max-w-5xl px-6 py-12">
         <h1 className="font-display text-2xl font-semibold text-[var(--ink)]">{hall.name} map</h1>
         <p className="mt-3 text-[var(--ink-soft)]">No floor plan has been created for this hall yet.</p>
-        <a className="mt-6 inline-block rounded-md bg-[var(--accent)] px-4 py-2.5 text-sm font-medium text-[var(--accent-ink)]" href={`/dashboard/exhibitions/${exhibitionId}/halls/${hallId}/map/setup?organizationId=${organizationId}`}>Create floor plan</a>
+        <a className="mt-6 inline-block rounded-md bg-[var(--brand)] px-4 py-2.5 text-sm font-medium text-[var(--brand-ink)]" href={`/dashboard/exhibitions/${exhibitionId}/halls/${hallId}/map/setup?organizationId=${organizationId}`}>Create floor plan</a>
       </main>
     );
   }

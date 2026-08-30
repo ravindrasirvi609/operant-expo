@@ -1,99 +1,191 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import * as React from "react";
+import { toast } from "sonner";
 
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { Field, FieldGroup } from "@/components/ui/field";
+import { Input } from "@/components/ui/input";
 import { SectionEyebrow } from "@/components/ui/section-eyebrow";
-import { parseJsonResponse } from "@/lib/http/client";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Textarea } from "@/components/ui/textarea";
+import { apiRequest } from "@/lib/http/client";
+import { applyApiErrors, useZodForm } from "@/lib/ui/forms";
+import { exhibitorSchema } from "@/lib/validation/booking";
 
-const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+type Ids = { exhibitionSlug: string; stallId: string };
 
-export default function BookingPage({ params }: { params: Promise<{ exhibitionSlug: string; stallId: string }> }) {
-  const [ids, setIds] = useState<{ exhibitionSlug: string; stallId: string } | null>(null);
-  const [expiresAt, setExpiresAt] = useState<number | null>(null);
-  const [seconds, setSeconds] = useState(0);
-  const [message, setMessage] = useState("");
-  const [error, setError] = useState("");
-  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
-  const [submitting, setSubmitting] = useState(false);
+function remainingSeconds(expiresAt: number) {
+  return Math.max(0, Math.floor((expiresAt - Date.now()) / 1000));
+}
 
-  useEffect(() => { void params.then(setIds); }, [params]);
-  useEffect(() => {
+export default function BookingPage({ params }: { params: Promise<Ids> }) {
+  const [ids, setIds] = React.useState<Ids | null>(null);
+  const [expiresAt, setExpiresAt] = React.useState<number | null>(null);
+  const [seconds, setSeconds] = React.useState(0);
+  const [holdError, setHoldError] = React.useState("");
+  const [holding, setHolding] = React.useState(true);
+  const [confirmation, setConfirmation] = React.useState<{ bookingNumber: string; total: number; currency: string } | null>(
+    null,
+  );
+
+  const form = useZodForm(exhibitorSchema, {
+    companyName: "",
+    legalName: "",
+    contactPerson: "",
+    email: "",
+    phone: "",
+    address: "",
+    taxIdentifier: "",
+  });
+  const {
+    register,
+    handleSubmit,
+    setError,
+    clearErrors,
+    formState: { errors, isSubmitting },
+  } = form;
+
+  React.useEffect(() => {
+    void params.then(setIds);
+  }, [params]);
+
+  React.useEffect(() => {
     if (!ids) return;
-    fetch(`/api/public/exhibitions/${ids.exhibitionSlug}/stalls/${ids.stallId}/hold`, { method: "POST" })
-      .then(async (response) => {
-        const data = await parseJsonResponse<{ error?: string; hold?: { expiresAt: string } }>(response);
-        if (!response.ok || data.error || !data.hold) throw new Error(data.error ?? "Unable to reserve stall");
-        setExpiresAt(new Date(data.hold.expiresAt).getTime());
-      })
-      .catch((cause) => setError(cause instanceof Error ? cause.message : "Unable to reserve stall"));
+    let cancelled = false;
+
+    void apiRequest<{ hold: { expiresAt: string } }>(
+      `/api/public/exhibitions/${ids.exhibitionSlug}/stalls/${ids.stallId}/hold`,
+      { method: "POST" },
+    ).then((result) => {
+      if (cancelled) return;
+      setHolding(false);
+      if (!result.ok) {
+        setHoldError(result.error);
+        return;
+      }
+      // Seed the countdown from the timestamp immediately. Starting at 0 and waiting for the
+      // first interval tick left the submit button disabled for a second, and an early submit
+      // reported "reservation expired" on a hold that had just been created.
+      const expiry = new Date(result.data.hold.expiresAt).getTime();
+      setExpiresAt(expiry);
+      setSeconds(remainingSeconds(expiry));
+    });
+
+    return () => {
+      cancelled = true;
+    };
   }, [ids]);
-  useEffect(() => {
+
+  React.useEffect(() => {
     if (!expiresAt) return;
-    const timer = setInterval(() => setSeconds(Math.max(0, Math.floor((expiresAt - Date.now()) / 1000))), 1000);
+    const timer = setInterval(() => setSeconds(remainingSeconds(expiresAt)), 1000);
     return () => clearInterval(timer);
   }, [expiresAt]);
 
-  function validate(data: Record<string, FormDataEntryValue>) {
-    const nextErrors: Record<string, string> = {};
-    if (!String(data.companyName ?? "").trim()) nextErrors.companyName = "Company name is required.";
-    if (!String(data.contactPerson ?? "").trim()) nextErrors.contactPerson = "Contact person is required.";
-    if (!EMAIL_PATTERN.test(String(data.email ?? ""))) nextErrors.email = "Enter a valid email address.";
-    return nextErrors;
-  }
+  const expired = Boolean(expiresAt) && seconds === 0;
 
-  async function submit(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (!ids || seconds === 0) return setError("Reservation expired — go back and select the stall again.");
-    const data = Object.fromEntries(new FormData(event.currentTarget));
-    const validationErrors = validate(data);
-    setFieldErrors(validationErrors);
-    if (Object.keys(validationErrors).length > 0) return;
+  const submit = handleSubmit(async (values) => {
+    if (!ids) return;
+    clearErrors("root");
 
-    setSubmitting(true);
-    setError("");
-    const idempotencyKey = crypto.randomUUID();
-    const response = await fetch(`/api/public/exhibitions/${ids.exhibitionSlug}/bookings`, { method: "POST", headers: { "Content-Type": "application/json", "Idempotency-Key": idempotencyKey }, body: JSON.stringify({ ...data, stallId: ids.stallId }) });
-    const result = await parseJsonResponse<{ error?: string; booking?: { bookingNumber: string } }>(response);
-    setSubmitting(false);
-    if (!response.ok || result.error || !result.booking) setError(result.error ?? "Booking failed");
-    else setMessage(`Booking ${result.booking.bookingNumber} created. We'll confirm once payment is received.`);
-  }
+    if (expired) {
+      setError("root", { type: "server", message: "Your reservation expired. Go back and select the stall again." });
+      return;
+    }
+
+    const result = await apiRequest<{
+      booking: { bookingNumber: string; total: number; currency: string };
+    }>(`/api/public/exhibitions/${ids.exhibitionSlug}/bookings`, {
+      method: "POST",
+      json: { ...values, stallId: ids.stallId },
+      // A fresh key per attempt: a retry after a failure is a new booking attempt, while a
+      // double-click within one attempt reuses this key and cannot create two bookings.
+      idempotencyKey: crypto.randomUUID(),
+    });
+
+    if (!result.ok) {
+      applyApiErrors(result, setError);
+      return;
+    }
+
+    setConfirmation(result.data.booking);
+    toast.success(`Booking ${result.data.booking.bookingNumber} submitted.`);
+  });
 
   return (
-    <main className="mx-auto max-w-md px-6 py-12">
+    <main className="mx-auto max-w-lg px-4 py-12 sm:px-6">
       <SectionEyebrow>Reserve your space</SectionEyebrow>
       <h1 className="mt-2 font-display text-3xl font-semibold text-[var(--ink)]">Exhibitor booking</h1>
 
-      {expiresAt && !message && (
-        <div className="mt-4 flex items-center justify-between rounded-md border border-[var(--held)] bg-[color-mix(in_srgb,var(--held)_10%,transparent)] px-4 py-3">
-          <span className="text-sm text-[var(--ink)]">Stall held for</span>
-          <span className="font-mono text-lg font-semibold tabular text-[var(--held)]">{Math.floor(seconds / 60)}:{String(seconds % 60).padStart(2, "0")}</span>
-        </div>
-      )}
-      {error && <p role="alert" className="mt-3 rounded-md border border-[var(--booked)] bg-[color-mix(in_srgb,var(--booked)_10%,transparent)] p-3 text-sm text-[var(--booked)]">{error}</p>}
+      {holding && <Skeleton className="mt-6 h-16" />}
 
-      {message ? (
-        <p className="mt-6 rounded-md border border-[var(--available)] bg-[color-mix(in_srgb,var(--available)_10%,transparent)] p-4 text-[var(--available)]">{message}</p>
+      {holdError && (
+        <Alert variant="destructive" className="mt-6">
+          <AlertTitle>This stall could not be reserved</AlertTitle>
+          <AlertDescription>{holdError}</AlertDescription>
+        </Alert>
+      )}
+
+      {expiresAt && !confirmation && (
+        <Alert variant={expired ? "destructive" : "warning"} className="mt-6" icon={false}>
+          <div className="flex items-center justify-between gap-4">
+            <span className="text-sm">{expired ? "Your reservation has expired" : "Stall held for"}</span>
+            <span className="font-mono text-lg font-semibold tabular">
+              {Math.floor(seconds / 60)}:{String(seconds % 60).padStart(2, "0")}
+            </span>
+          </div>
+        </Alert>
+      )}
+
+      {confirmation ? (
+        <Alert variant="success" className="mt-6">
+          <AlertTitle>Booking {confirmation.bookingNumber} submitted</AlertTitle>
+          <AlertDescription>
+            We have reserved the stall against your details. The organizer confirms it once payment of{" "}
+            <strong>
+              {confirmation.total.toLocaleString()} {confirmation.currency}
+            </strong>{" "}
+            is received. A confirmation email is on its way.
+          </AlertDescription>
+        </Alert>
       ) : (
-        <form onSubmit={submit} className="mt-6 space-y-3">
-          <div>
-            <input name="companyName" required placeholder="Company name" className="w-full rounded-md border border-[var(--line-strong)] bg-transparent p-3" />
-            {fieldErrors.companyName && <p className="mt-1 text-xs text-[var(--booked)]">{fieldErrors.companyName}</p>}
-          </div>
-          <div>
-            <input name="contactPerson" required placeholder="Contact person" className="w-full rounded-md border border-[var(--line-strong)] bg-transparent p-3" />
-            {fieldErrors.contactPerson && <p className="mt-1 text-xs text-[var(--booked)]">{fieldErrors.contactPerson}</p>}
-          </div>
-          <div>
-            <input name="email" required type="email" placeholder="Email" className="w-full rounded-md border border-[var(--line-strong)] bg-transparent p-3" />
-            {fieldErrors.email && <p className="mt-1 text-xs text-[var(--booked)]">{fieldErrors.email}</p>}
-          </div>
-          <input name="phone" placeholder="Phone" className="w-full rounded-md border border-[var(--line-strong)] bg-transparent p-3" />
-          <textarea name="address" placeholder="Address" className="w-full rounded-md border border-[var(--line-strong)] bg-transparent p-3" />
-          <button disabled={!expiresAt || seconds === 0 || submitting} className="w-full rounded-md bg-[var(--accent)] p-3 font-medium text-[var(--accent-ink)] disabled:opacity-50">
-            {submitting ? "Submitting…" : "Submit booking"}
-          </button>
-        </form>
+        <Card className="mt-6 p-6">
+          <form onSubmit={submit} className="space-y-4" noValidate>
+            {errors.root?.message && (
+              <Alert variant="destructive">
+                <AlertDescription>{errors.root.message}</AlertDescription>
+              </Alert>
+            )}
+
+            <Field label="Company name" error={errors.companyName?.message} required>
+              <Input {...register("companyName")} autoComplete="organization" />
+            </Field>
+
+            <Field label="Contact person" error={errors.contactPerson?.message} required>
+              <Input {...register("contactPerson")} autoComplete="name" />
+            </Field>
+
+            <FieldGroup columns={2}>
+              <Field label="Email" error={errors.email?.message} required>
+                <Input {...register("email")} type="email" autoComplete="email" />
+              </Field>
+              <Field label="Phone" error={errors.phone?.message}>
+                <Input {...register("phone")} type="tel" autoComplete="tel" />
+              </Field>
+            </FieldGroup>
+
+            <Field label="Address" error={errors.address?.message}>
+              <Textarea {...register("address")} rows={2} autoComplete="street-address" />
+            </Field>
+
+            <Button type="submit" size="lg" className="w-full" loading={isSubmitting} disabled={!expiresAt || expired}>
+              {isSubmitting ? "Submitting…" : "Submit booking"}
+            </Button>
+          </form>
+        </Card>
       )}
     </main>
   );

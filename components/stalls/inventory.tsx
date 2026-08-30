@@ -1,103 +1,641 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import * as React from "react";
+import Link from "next/link";
+import { Building2, Grid3x3, LayoutTemplate, Pencil } from "lucide-react";
+import { toast } from "sonner";
+import { z } from "zod";
 
+import { useOrganization } from "@/components/providers/organization-provider";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Button } from "@/components/ui/button";
+import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { EmptyState } from "@/components/ui/empty-state";
+import { Field, FieldGroup } from "@/components/ui/field";
+import { Input } from "@/components/ui/input";
 import { SectionEyebrow } from "@/components/ui/section-eyebrow";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Skeleton } from "@/components/ui/skeleton";
 import { StatusBadge } from "@/components/ui/status-badge";
-import { parseJsonResponse } from "@/lib/http/client";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Textarea } from "@/components/ui/textarea";
+import { apiRequest } from "@/lib/http/client";
+import { applyApiErrors, useZodForm } from "@/lib/ui/forms";
+import { useOrgResource } from "@/lib/ui/use-org-resource";
+import {
+  STALL_STATUSES,
+  STALL_TYPES,
+  STALL_TYPE_LABELS,
+  VISIBILITIES,
+  stallSchema,
+} from "@/lib/validation/map";
 
-type Org = { _id: string; name: string }; type Exhibition = { _id: string; name: string }; type Hall = { _id: string; name: string }; type Element = { _id: string; label?: string };
-type Stall = { _id: string; floorPlanElementId: string; stallNumber: string; section?: string; stallType: string; width: number; height: number; basePrice: number; currency: string; status: string; visibility: string; amenities: string[]; area: number };
-const statuses = ["AVAILABLE", "PENDING", "BLOCKED", "HELD", "BOOKED"];
-const types = ["STANDARD", "PREMIUM", "CORNER", "ISLAND", "RAW_SPACE", "SHELL_SCHEME"];
+type Exhibition = { _id: string; name: string; lifecycle: string };
+type Hall = { _id: string; name: string; code: string };
+type MapElement = { _id: string; label?: string };
 
-export default function StallsInventory() {
-  const [orgs, setOrgs] = useState<Org[]>([]), [orgId, setOrgId] = useState(""), [exhibitions, setExhibitions] = useState<Exhibition[]>([]), [exId, setExId] = useState(""), [halls, setHalls] = useState<Hall[]>([]), [hallId, setHallId] = useState(""), [elements, setElements] = useState<Element[]>([]), [stalls, setStalls] = useState<Stall[]>([]), [editing, setEditing] = useState<Stall>(), [loading, setLoading] = useState(true), [error, setError] = useState(""), [message, setMessage] = useState("");
-  useEffect(() => { fetch("/api/me/organizations").then((r) => r.json()).then((d) => { setOrgs(d.organizations ?? []); setOrgId(d.organizations?.[0]?._id ?? ""); }).catch(() => setError("Unable to load organizations")); }, []);
-  useEffect(() => { if (!orgId) return; fetch(`/api/organizations/${orgId}/exhibitions`).then((r) => r.json()).then((d) => { setExhibitions(d.exhibitions ?? []); setExId(d.exhibitions?.[0]?._id ?? ""); }).catch(() => setError("Unable to load exhibitions")); }, [orgId]);
-  useEffect(() => { if (!orgId || !exId) return; fetch(`/api/organizations/${orgId}/exhibitions/${exId}/halls`).then((r) => r.json()).then((d) => { setHalls(d.halls ?? []); setHallId(d.halls?.[0]?._id ?? ""); }).catch(() => setError("Unable to load halls")); }, [orgId, exId]);
-  async function loadHall(id: string) { setHallId(id); if (!orgId || !exId || !id) return; setLoading(true); setError(""); try { const [a, b] = await Promise.all([fetch(`/api/organizations/${orgId}/exhibitions/${exId}/halls/${id}/stalls`), fetch(`/api/organizations/${orgId}/exhibitions/${exId}/halls/${id}/map-elements`)]); const ad = await a.json(), bd = await b.json(); if (!a.ok || !b.ok) throw Error(ad.error ?? bd.error); setStalls(ad.stalls ?? []); setElements(bd.elements ?? []); } catch (e) { setError(e instanceof Error ? e.message : "Unable to load hall"); } finally { setLoading(false); } }
-  // The loader intentionally follows the selected hall; organization and exhibition are
-  // already reflected in the selected hall list before this effect runs.
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  useEffect(() => { if (hallId) void loadHall(hallId); }, [hallId]);
-  async function submit(event: React.FormEvent<HTMLFormElement>, stall?: Stall) { event.preventDefault(); const form = event.currentTarget; setError(""); setMessage(""); const raw = Object.fromEntries(new FormData(form)); const body = { ...raw, width: Number(raw.width), height: Number(raw.height), basePrice: Number(raw.basePrice), amenities: typeof raw.amenities === "string" && raw.amenities ? raw.amenities.split(",").map((v) => v.trim()).filter(Boolean) : [] }; const url = stall ? `/api/organizations/${orgId}/exhibitions/${exId}/halls/${hallId}/stalls/${stall._id}` : `/api/organizations/${orgId}/exhibitions/${exId}/halls/${hallId}/stalls`; const r = await fetch(url, { method: stall ? "PATCH" : "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }); const d = await parseJsonResponse<{ error?: string; stall?: Stall }>(r); const savedStall = d.stall; if (!r.ok || d.error || !savedStall) setError(d.error ?? "Unable to save stall"); else { setStalls((all) => stall ? all.map((s) => s._id === stall._id ? savedStall : s) : [...all, savedStall]); setEditing(undefined); setMessage(stall ? `Stall ${savedStall.stallNumber} updated.` : `Stall ${savedStall.stallNumber} added to inventory.`); if (!stall) form.reset(); } }
-  const form = (stall?: Stall) => (
-    <form onSubmit={(e) => void submit(e, stall)} className="space-y-3">
-      {!stall && <select name="floorPlanElementId" required className="w-full rounded-md border border-[var(--line-strong)] bg-[var(--paper-raised)] p-3"><option value="">Select map stall element</option>{elements.map((e) => <option key={e._id} value={e._id}>{e.label ?? "Unnamed stall"}</option>)}</select>}
-      <input name="stallNumber" required defaultValue={stall?.stallNumber} placeholder="Stall number e.g. A-12" className="w-full rounded-md border border-[var(--line-strong)] bg-transparent p-3" />
-      <input name="section" defaultValue={stall?.section} placeholder="Section e.g. A" className="w-full rounded-md border border-[var(--line-strong)] bg-transparent p-3" />
-      <select name="stallType" defaultValue={stall?.stallType ?? "STANDARD"} className="w-full rounded-md border border-[var(--line-strong)] bg-[var(--paper-raised)] p-3">{types.map((v) => <option key={v} value={v}>{v.replace("_", " ")}</option>)}</select>
-      <div className="grid grid-cols-2 gap-3">
-        <input name="width" required type="number" min="1" defaultValue={stall?.width} placeholder="Width" className="rounded-md border border-[var(--line-strong)] bg-transparent p-3" />
-        <input name="height" required type="number" min="1" defaultValue={stall?.height} placeholder="Height" className="rounded-md border border-[var(--line-strong)] bg-transparent p-3" />
-      </div>
-      <div className="grid grid-cols-2 gap-3">
-        <input name="basePrice" required type="number" min="0" defaultValue={stall?.basePrice} placeholder="Base price" className="rounded-md border border-[var(--line-strong)] bg-transparent p-3" />
-        <input name="currency" required defaultValue={stall?.currency ?? "INR"} maxLength={3} placeholder="Currency" className="rounded-md border border-[var(--line-strong)] bg-transparent p-3" />
-      </div>
-      <input name="amenities" defaultValue={stall?.amenities?.join(", ")} placeholder="Amenities, comma separated" className="w-full rounded-md border border-[var(--line-strong)] bg-transparent p-3" />
-      <div className="grid grid-cols-2 gap-3">
-        <select name="status" defaultValue={stall?.status ?? "AVAILABLE"} className="rounded-md border border-[var(--line-strong)] bg-[var(--paper-raised)] p-3">{statuses.map((v) => <option key={v} value={v}>{v}</option>)}</select>
-        <select name="visibility" defaultValue={stall?.visibility ?? "PUBLIC"} className="rounded-md border border-[var(--line-strong)] bg-[var(--paper-raised)] p-3"><option value="PUBLIC">PUBLIC</option><option value="PRIVATE">PRIVATE</option></select>
-      </div>
+type Stall = {
+  _id: string;
+  floorPlanElementId: string;
+  stallNumber: string;
+  section?: string;
+  stallType: string;
+  width: number;
+  height: number;
+  area: number;
+  basePrice: number;
+  currency: string;
+  status: string;
+  visibility: string;
+  amenities: string[];
+  description?: string;
+};
+
+/**
+ * Amenities are stored as an array but typed as one comma-separated line, so the form carries a
+ * text field and converts on submit. Everything else validates against the shared stall schema
+ * the API uses, so a rule cannot differ between the two.
+ */
+const stallFormSchema = stallSchema.omit({ amenities: true }).extend({
+  amenitiesText: z.string().max(400, "Keep the amenities list under 400 characters.").optional(),
+});
+
+function toAmenities(text?: string) {
+  return (text ?? "")
+    .split(",")
+    .map((value) => value.trim())
+    .filter(Boolean);
+}
+
+const EMPTY_STALL = {
+  floorPlanElementId: "",
+  stallNumber: "",
+  section: "",
+  stallType: "STANDARD" as const,
+  width: "" as unknown as number,
+  height: "" as unknown as number,
+  basePrice: "" as unknown as number,
+  currency: "INR",
+  description: "",
+  amenitiesText: "",
+  visibility: "PUBLIC" as const,
+  status: "AVAILABLE" as const,
+};
+
+function StallForm({
+  organizationId,
+  exhibitionId,
+  hallId,
+  elements,
+  stall,
+  linkedElementIds,
+  onSaved,
+  onCancel,
+}: {
+  organizationId: string;
+  exhibitionId: string;
+  hallId: string;
+  elements: MapElement[];
+  stall?: Stall;
+  linkedElementIds: Set<string>;
+  onSaved: (stall: Stall, created: boolean) => void;
+  onCancel?: () => void;
+}) {
+  const editing = Boolean(stall);
+
+  const form = useZodForm(
+    stallFormSchema,
+    stall
+      ? {
+          floorPlanElementId: stall.floorPlanElementId,
+          stallNumber: stall.stallNumber,
+          section: stall.section ?? "",
+          stallType: stall.stallType as (typeof STALL_TYPES)[number],
+          width: stall.width,
+          height: stall.height,
+          basePrice: stall.basePrice,
+          currency: stall.currency,
+          description: stall.description ?? "",
+          amenitiesText: stall.amenities.join(", "),
+          visibility: stall.visibility as (typeof VISIBILITIES)[number],
+          status: stall.status as (typeof STALL_STATUSES)[number],
+        }
+      : EMPTY_STALL,
+  );
+  const {
+    register,
+    handleSubmit,
+    reset,
+    setError,
+    setValue,
+    watch,
+    clearErrors,
+    formState: { errors, isSubmitting },
+  } = form;
+
+  // Only elements without a stall record are offered, so two inventory items can never claim the
+  // same rectangle on the plan.
+  const availableElements = elements.filter(
+    (element) => !linkedElementIds.has(element._id) || element._id === stall?.floorPlanElementId,
+  );
+
+  const submit = handleSubmit(async (values) => {
+    clearErrors("root");
+    const { amenitiesText, ...rest } = values;
+    const payload = { ...rest, amenities: toAmenities(amenitiesText) };
+
+    const base = `/api/organizations/${organizationId}/exhibitions/${exhibitionId}/halls/${hallId}/stalls`;
+    const result = await apiRequest<{ stall: Stall }>(stall ? `${base}/${stall._id}` : base, {
+      method: stall ? "PATCH" : "POST",
+      json: payload,
+    });
+
+    if (!result.ok) {
+      applyApiErrors(result, setError);
+      return;
+    }
+
+    onSaved(result.data.stall, !stall);
+    toast.success(
+      stall
+        ? `Stall ${result.data.stall.stallNumber} updated.`
+        : `Stall ${result.data.stall.stallNumber} added to inventory.`,
+    );
+    if (!stall) reset(EMPTY_STALL);
+  });
+
+  return (
+    <form onSubmit={submit} className="space-y-4" noValidate>
+      {errors.root?.message && (
+        <Alert variant="destructive">
+          <AlertDescription>{errors.root.message}</AlertDescription>
+        </Alert>
+      )}
+
+      {!editing && (
+        <Field
+          label="Floor-plan rectangle"
+          error={errors.floorPlanElementId?.message}
+          description="Which shape on the map this stall is. Draw shapes in the floor-plan editor first."
+          htmlFor="stall-element"
+          required
+        >
+          <Select
+            value={watch("floorPlanElementId")}
+            onValueChange={(value) => setValue("floorPlanElementId", value, { shouldDirty: true })}
+          >
+            <SelectTrigger id="stall-element">
+              <SelectValue placeholder={availableElements.length ? "Select a rectangle" : "No unlinked rectangles"} />
+            </SelectTrigger>
+            <SelectContent>
+              {availableElements.map((element) => (
+                <SelectItem key={element._id} value={element._id}>
+                  {element.label ?? "Unnamed stall"}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </Field>
+      )}
+
+      <FieldGroup columns={2}>
+        <Field label="Stall number" error={errors.stallNumber?.message} required>
+          <Input {...register("stallNumber")} placeholder="A-12" />
+        </Field>
+        <Field label="Section" error={errors.section?.message}>
+          <Input {...register("section")} placeholder="A" />
+        </Field>
+      </FieldGroup>
+
+      <Field label="Stall type" error={errors.stallType?.message} htmlFor="stall-type" required>
+        <Select
+          value={watch("stallType")}
+          onValueChange={(value) =>
+            setValue("stallType", value as (typeof STALL_TYPES)[number], { shouldDirty: true })
+          }
+        >
+          <SelectTrigger id="stall-type">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {STALL_TYPES.map((type) => (
+              <SelectItem key={type} value={type}>
+                {STALL_TYPE_LABELS[type]}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </Field>
+
+      <FieldGroup columns={2}>
+        <Field label="Width (m)" error={errors.width?.message} required>
+          <Input {...register("width")} type="number" min="0.5" step="0.5" inputMode="decimal" placeholder="3" />
+        </Field>
+        <Field label="Depth (m)" error={errors.height?.message} required>
+          <Input {...register("height")} type="number" min="0.5" step="0.5" inputMode="decimal" placeholder="3" />
+        </Field>
+        <Field label="Base price" error={errors.basePrice?.message} required>
+          <Input {...register("basePrice")} type="number" min="0" step="1" inputMode="decimal" placeholder="45000" />
+        </Field>
+        <Field label="Currency" error={errors.currency?.message} required>
+          <Input {...register("currency")} maxLength={3} placeholder="INR" spellCheck={false} />
+        </Field>
+      </FieldGroup>
+
+      <Field
+        label="Amenities"
+        error={errors.amenitiesText?.message}
+        description="Comma separated, e.g. Power, Wi-Fi, Corner access."
+      >
+        <Input {...register("amenitiesText")} placeholder="Power, Wi-Fi" />
+      </Field>
+
+      <Field label="Description" error={errors.description?.message}>
+        <Textarea {...register("description")} rows={2} placeholder="Shown to visitors before they book." />
+      </Field>
+
+      <FieldGroup columns={2}>
+        <Field label="Status" error={errors.status?.message} htmlFor="stall-status">
+          <Select
+            value={watch("status") ?? "AVAILABLE"}
+            onValueChange={(value) =>
+              setValue("status", value as (typeof STALL_STATUSES)[number], { shouldDirty: true })
+            }
+          >
+            <SelectTrigger id="stall-status">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {STALL_STATUSES.map((status) => (
+                <SelectItem key={status} value={status}>
+                  {status.replace(/_/g, " ").toLowerCase()}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </Field>
+        <Field
+          label="Visibility"
+          error={errors.visibility?.message}
+          htmlFor="stall-visibility"
+          description="Private stalls never appear publicly."
+        >
+          <Select
+            value={watch("visibility")}
+            onValueChange={(value) =>
+              setValue("visibility", value as (typeof VISIBILITIES)[number], { shouldDirty: true })
+            }
+          >
+            <SelectTrigger id="stall-visibility">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {VISIBILITIES.map((visibility) => (
+                <SelectItem key={visibility} value={visibility}>
+                  {visibility.toLowerCase()}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </Field>
+      </FieldGroup>
+
       <div className="flex gap-2">
-        <button className="flex-1 rounded-md bg-[var(--accent)] p-3 font-semibold text-[var(--accent-ink)]">{stall ? "Save changes" : "Create stall"}</button>
-        {stall && <button type="button" onClick={() => setEditing(undefined)} className="rounded-md border border-[var(--line-strong)] px-4 text-[var(--ink)]">Cancel</button>}
+        <Button
+          type="submit"
+          loading={isSubmitting}
+          className="flex-1"
+          disabled={!editing && availableElements.length === 0}
+        >
+          {editing ? "Save changes" : "Create stall"}
+        </Button>
+        {onCancel && (
+          <Button type="button" variant="outline" onClick={onCancel}>
+            Cancel
+          </Button>
+        )}
       </div>
     </form>
   );
+}
+
+export default function StallsInventory() {
+  const { organizationId, loading: organizationsLoading, can } = useOrganization();
+
+  // Only the user's explicit picks are stored; the effective selection falls back to the first
+  // available option. Deriving it this way removes the three chained effects that each wrote
+  // default state as soon as a list arrived.
+  const [pickedExhibitionId, setPickedExhibitionId] = React.useState("");
+  const [pickedHallId, setPickedHallId] = React.useState("");
+  const [editing, setEditing] = React.useState<Stall | null>(null);
+  const [createdOrUpdated, setCreatedOrUpdated] = React.useState<Stall[]>([]);
+
+  const exhibitionResource = useOrgResource<{ exhibitions: Exhibition[] }>(
+    organizationId ? `/api/organizations/${organizationId}/exhibitions` : null,
+  );
+  const exhibitions = exhibitionResource.data?.exhibitions ?? [];
+  const exhibitionId =
+    pickedExhibitionId && exhibitions.some((item) => item._id === pickedExhibitionId)
+      ? pickedExhibitionId
+      : (exhibitions[0]?._id ?? "");
+
+  const hallResource = useOrgResource<{ halls: Hall[] }>(
+    organizationId && exhibitionId
+      ? `/api/organizations/${organizationId}/exhibitions/${exhibitionId}/halls`
+      : null,
+  );
+  const halls = hallResource.data?.halls ?? [];
+  const hallId =
+    pickedHallId && halls.some((item) => item._id === pickedHallId) ? pickedHallId : (halls[0]?._id ?? "");
+
+  const hallBase =
+    organizationId && exhibitionId && hallId
+      ? `/api/organizations/${organizationId}/exhibitions/${exhibitionId}/halls/${hallId}`
+      : null;
+
+  const stallResource = useOrgResource<{ stalls: Stall[] }>(hallBase ? `${hallBase}/stalls` : null);
+  const elementResource = useOrgResource<{ elements: MapElement[] }>(
+    hallBase ? `${hallBase}/map-elements` : null,
+  );
+
+  const elements = elementResource.data?.elements ?? [];
+  const loading =
+    exhibitionResource.loading || hallResource.loading || stallResource.loading || elementResource.loading;
+  const error =
+    exhibitionResource.error || hallResource.error || stallResource.error || elementResource.error;
+
+  // Server list merged with anything saved in this session, so a new stall appears immediately.
+  const stalls = React.useMemo(() => {
+    const loaded = stallResource.data?.stalls ?? [];
+    const byId = new Map(loaded.map((stall) => [stall._id, stall]));
+    for (const stall of createdOrUpdated) byId.set(stall._id, stall);
+    return Array.from(byId.values()).sort((a, b) => a.stallNumber.localeCompare(b.stallNumber));
+  }, [stallResource.data, createdOrUpdated]);
+
+  const canManage = can("exhibition:manage");
+
+  const linkedElementIds = React.useMemo(
+    () => new Set(stalls.map((stall) => stall.floorPlanElementId)),
+    [stalls],
+  );
+  const unlinkedCount = elements.length - linkedElementIds.size;
+  const selectedExhibition = exhibitions.find((exhibition) => exhibition._id === exhibitionId);
+
+  function upsertStall(stall: Stall, created: boolean) {
+    setCreatedOrUpdated((current) => [...current.filter((item) => item._id !== stall._id), stall]);
+    if (!created) setEditing(null);
+  }
+
+  const planHref =
+    exhibitionId && hallId
+      ? `/dashboard/exhibitions/${exhibitionId}/halls/${hallId}/map/edit?organizationId=${organizationId}`
+      : "";
+
   return (
-    <main className="mx-auto max-w-7xl px-6 py-10">
-      <div className="flex flex-col gap-5 border-b border-[var(--line)] pb-8 sm:flex-row sm:items-end sm:justify-between">
+    <main className="mx-auto max-w-7xl px-4 py-10 sm:px-6">
+      <div className="flex flex-col gap-5 border-b border-[var(--line)] pb-8 xl:flex-row xl:items-end xl:justify-between">
         <div>
           <SectionEyebrow>Inventory</SectionEyebrow>
-          <h1 className="mt-2 font-display text-4xl font-semibold tracking-tight text-[var(--ink)]">Stalls</h1>
-          <p className="mt-3 text-[var(--ink-soft)]">Manage pricing, visibility and live availability for every bookable stall.</p>
+          <h1 className="mt-2 font-display text-3xl font-semibold tracking-tight text-[var(--ink)] sm:text-4xl">
+            Stalls
+          </h1>
+          <p className="mt-3 max-w-2xl text-[var(--ink-soft)]">
+            Pricing, visibility and live availability for every bookable stall. A stall must be linked to a rectangle
+            on its hall floor plan before visitors can book it.
+          </p>
         </div>
-        <div className="flex flex-wrap gap-2">
-          <select value={orgId} onChange={(e) => setOrgId(e.target.value)} className="rounded-md border border-[var(--line-strong)] bg-[var(--paper-raised)] px-3 py-2 text-sm">{orgs.map((o) => <option key={o._id} value={o._id}>{o.name}</option>)}</select>
-          <select value={exId} onChange={(e) => setExId(e.target.value)} className="rounded-md border border-[var(--line-strong)] bg-[var(--paper-raised)] px-3 py-2 text-sm">{exhibitions.map((e) => <option key={e._id} value={e._id}>{e.name}</option>)}</select>
-          <select value={hallId} onChange={(e) => void loadHall(e.target.value)} className="rounded-md border border-[var(--line-strong)] bg-[var(--paper-raised)] px-3 py-2 text-sm">{halls.map((h) => <option key={h._id} value={h._id}>{h.name}</option>)}</select>
+
+        <div className="grid gap-2 sm:grid-cols-2">
+          <Select value={exhibitionId} onValueChange={setPickedExhibitionId}>
+            <SelectTrigger size="sm" aria-label="Exhibition">
+              <SelectValue placeholder="Exhibition" />
+            </SelectTrigger>
+            <SelectContent>
+              {exhibitions.map((exhibition) => (
+                <SelectItem key={exhibition._id} value={exhibition._id}>
+                  {exhibition.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Select value={hallId} onValueChange={setPickedHallId}>
+            <SelectTrigger size="sm" aria-label="Hall">
+              <SelectValue placeholder="Hall" />
+            </SelectTrigger>
+            <SelectContent>
+              {halls.map((hall) => (
+                <SelectItem key={hall._id} value={hall._id}>
+                  {hall.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
       </div>
-      {error && <p role="alert" className="mt-5 rounded-md border border-[var(--booked)] bg-[color-mix(in_srgb,var(--booked)_10%,transparent)] p-4 text-sm text-[var(--booked)]">{error}</p>}
-      {message && <p role="status" className="mt-5 rounded-md border border-[var(--available)] bg-[color-mix(in_srgb,var(--available)_10%,transparent)] p-4 text-sm text-[var(--available)]">{message}</p>}
-      <div className="mt-8 grid gap-8 xl:grid-cols-[1fr_360px]">
-        <section className="overflow-hidden rounded-2xl border border-[var(--line)] bg-[var(--paper-raised)] shadow-sm">
-          <div className="border-b border-[var(--line)] p-5">
-            <h2 className="font-display font-semibold text-[var(--ink)]">Stall inventory</h2>
-            <p className="mt-1 text-sm text-[var(--ink-soft)]">{stalls.length} configured · {stalls.filter((s) => s.status === "AVAILABLE").length} available</p>
-          </div>
-          {loading ? (
-            <p className="p-8 text-[var(--ink-soft)]">Loading inventory…</p>
-          ) : stalls.length === 0 ? (
-            <p className="p-10 text-center text-[var(--ink-soft)]">No stalls configured for this hall.</p>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-sm">
-                <thead className="bg-[var(--paper)] text-[var(--ink-soft)]"><tr><th className="px-5 py-3">Stall</th><th className="px-5 py-3">Area</th><th className="px-5 py-3">Price</th><th className="px-5 py-3">Status</th><th className="px-5 py-3">Action</th></tr></thead>
-                <tbody className="divide-y divide-[var(--line)]">
-                  {stalls.map((s) => (
-                    <tr key={s._id}>
-                      <td className="px-5 py-4 font-mono font-medium text-[var(--ink)]">{s.stallNumber}<span className="ml-2 text-[var(--ink-faint)]">{s.section}</span></td>
-                      <td className="px-5 py-4 font-mono tabular">{s.area}</td>
-                      <td className="px-5 py-4 font-mono tabular">{s.basePrice.toLocaleString()} {s.currency}</td>
-                      <td className="px-5 py-4"><StatusBadge status={s.status} /></td>
-                      <td className="px-5 py-4"><button onClick={() => setEditing(s)} className="rounded-md border border-[var(--line-strong)] px-3 py-1.5 text-xs font-semibold text-[var(--ink)]">Edit</button></td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+
+      {error && (
+        <Alert variant="destructive" className="mt-6">
+          <AlertTitle>Couldn&apos;t load inventory</AlertTitle>
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
+      )}
+
+      {!organizationId && !organizationsLoading ? (
+        <EmptyState
+          className="mt-8"
+          icon={Building2}
+          title="No organization yet"
+          description="Create an organization, an exhibition and a hall before adding stalls."
+          action={
+            <Button asChild>
+              <Link href="/dashboard/organizations/new">Create organization</Link>
+            </Button>
+          }
+        />
+      ) : exhibitions.length === 0 && !loading ? (
+        <EmptyState
+          className="mt-8"
+          icon={Grid3x3}
+          title="No exhibitions yet"
+          description="Stalls belong to a hall inside an exhibition. Create an exhibition first."
+          action={
+            <Button asChild>
+              <Link href="/dashboard/exhibitions">Go to exhibitions</Link>
+            </Button>
+          }
+        />
+      ) : halls.length === 0 && !loading ? (
+        <EmptyState
+          className="mt-8"
+          icon={Grid3x3}
+          title="This exhibition has no halls"
+          description="Add a hall to it, then design the hall floor plan to place stalls."
+          action={
+            <Button asChild>
+              <Link href="/dashboard/exhibitions">Add a hall</Link>
+            </Button>
+          }
+        />
+      ) : (
+        <>
+          {!loading && elements.length === 0 && (
+            <Alert variant="warning" className="mt-6">
+              <AlertTitle>This hall has no floor-plan rectangles yet</AlertTitle>
+              <AlertDescription>
+                A stall is an inventory record attached to a shape on the floor plan. Draw the stalls on the plan
+                first, then price them here.
+                {planHref && (
+                  <span className="mt-3 block">
+                    <Button asChild size="sm">
+                      <Link href={planHref}>
+                        <LayoutTemplate aria-hidden />
+                        Open floor-plan editor
+                      </Link>
+                    </Button>
+                  </span>
+                )}
+              </AlertDescription>
+            </Alert>
           )}
-        </section>
-        <aside className="corner-marks h-fit rounded-2xl border border-[var(--line)] bg-[var(--paper-raised)] p-6 shadow-sm">
-          <h2 className="font-display font-semibold text-[var(--ink)]">{editing ? `Edit ${editing.stallNumber}` : "Add bookable stall"}</h2>
-          <p className="mb-4 mt-1 text-sm text-[var(--ink-soft)]">{editing ? "Update pricing, visibility or booking status." : "Link a map rectangle to a bookable inventory item."}</p>
-          {form(editing)}
-        </aside>
-      </div>
+
+          {!loading && elements.length > 0 && unlinkedCount > 0 && (
+            <Alert variant="warning" className="mt-6">
+              <AlertTitle>
+                {unlinkedCount} {unlinkedCount === 1 ? "rectangle is" : "rectangles are"} not bookable
+              </AlertTitle>
+              <AlertDescription>
+                They exist on the floor plan but have no price or stall number, so visitors cannot book them. Add them
+                as stalls using the panel on the right.
+              </AlertDescription>
+            </Alert>
+          )}
+
+          <div className="mt-8 grid gap-8 xl:grid-cols-[1fr_380px]">
+            <Card className="overflow-hidden">
+              <CardHeader className="border-b border-[var(--line)]">
+                <CardTitle>Stall inventory</CardTitle>
+                <CardDescription>
+                  {stalls.length} configured · {stalls.filter((stall) => stall.status === "AVAILABLE").length} available
+                  {selectedExhibition ? ` · ${selectedExhibition.name}` : ""}
+                </CardDescription>
+              </CardHeader>
+
+              {loading ? (
+                <div className="space-y-3 p-6">
+                  {Array.from({ length: 4 }).map((_, index) => (
+                    <Skeleton key={index} className="h-10" />
+                  ))}
+                </div>
+              ) : stalls.length === 0 ? (
+                <EmptyState
+                  className="border-0"
+                  icon={Grid3x3}
+                  title="No stalls configured for this hall"
+                  description="Once you add one, it becomes bookable on the published floor plan."
+                />
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Stall</TableHead>
+                      <TableHead>Type</TableHead>
+                      <TableHead>Area</TableHead>
+                      <TableHead>Price</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead className="text-right">Action</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {stalls.map((stall) => (
+                      <TableRow key={stall._id}>
+                        <TableCell className="font-mono font-medium text-[var(--ink)]">
+                          {stall.stallNumber}
+                          {stall.section && <span className="ml-2 text-[var(--ink-faint)]">{stall.section}</span>}
+                          {stall.visibility === "PRIVATE" && (
+                            <span className="ml-2 text-xs font-normal text-[var(--ink-faint)]">private</span>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-[var(--ink-soft)]">
+                          {STALL_TYPE_LABELS[stall.stallType as (typeof STALL_TYPES)[number]] ?? stall.stallType}
+                        </TableCell>
+                        <TableCell className="font-mono tabular">{stall.area} m²</TableCell>
+                        <TableCell className="font-mono tabular">
+                          {stall.basePrice.toLocaleString()} {stall.currency}
+                        </TableCell>
+                        <TableCell>
+                          <StatusBadge status={stall.status} />
+                        </TableCell>
+                        <TableCell className="text-right">
+                          {canManage && (
+                            <Button size="sm" variant="outline" onClick={() => setEditing(stall)}>
+                              <Pencil aria-hidden />
+                              Edit
+                            </Button>
+                          )}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              )}
+            </Card>
+
+            <aside>
+              {canManage ? (
+                <Card className="corner-marks h-fit p-6">
+                  <h2 className="font-display font-semibold text-[var(--ink)]">Add bookable stall</h2>
+                  <p className="mb-4 mt-1 text-sm text-[var(--ink-soft)]">
+                    Link a floor-plan rectangle to a priced inventory item.
+                  </p>
+                  {hallId && (
+                    <StallForm
+                      organizationId={organizationId}
+                      exhibitionId={exhibitionId}
+                      hallId={hallId}
+                      elements={elements}
+                      linkedElementIds={linkedElementIds}
+                      onSaved={upsertStall}
+                    />
+                  )}
+                </Card>
+              ) : (
+                <Alert variant="info">
+                  <AlertTitle>Read-only access</AlertTitle>
+                  <AlertDescription>Your role can view stalls but not change pricing or availability.</AlertDescription>
+                </Alert>
+              )}
+            </aside>
+          </div>
+        </>
+      )}
+
+      <Dialog open={Boolean(editing)} onOpenChange={(open) => !open && setEditing(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Edit stall {editing?.stallNumber}</DialogTitle>
+            <DialogDescription>Update pricing, visibility or booking status.</DialogDescription>
+          </DialogHeader>
+          {editing && (
+            <StallForm
+              organizationId={organizationId}
+              exhibitionId={exhibitionId}
+              hallId={hallId}
+              elements={elements}
+              stall={editing}
+              linkedElementIds={linkedElementIds}
+              onSaved={upsertStall}
+              onCancel={() => setEditing(null)}
+            />
+          )}
+        </DialogContent>
+      </Dialog>
     </main>
   );
 }

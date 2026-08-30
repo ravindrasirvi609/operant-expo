@@ -1,18 +1,24 @@
 import { z } from "zod";
 
+import { emailField, passwordField, requiredText, slugField } from "@/lib/validation/primitives";
+
 export const credentialsSchema = z.object({
-  email: z.string().trim().email().max(254),
-  password: z.string().min(8).max(128),
+  email: emailField,
+  password: passwordField,
 });
 
 export const registrationSchema = credentialsSchema.extend({
-  name: z.string().trim().min(2).max(120),
-  organizationName: z.string().trim().min(2).max(160),
-  organizationSlug: z.string().trim().min(2).max(80).regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/),
+  name: requiredText("Your name", { min: 2, max: 120 }),
+  organizationName: requiredText("Organization name", { min: 2, max: 160 }),
+  organizationSlug: slugField,
 });
 
 export const invitationSchema = z.object({
-  email: z.string().trim().email().max(254),
-  role: z.enum(["ORGANIZER_ADMIN", "ORGANIZER_STAFF", "MAP_EDITOR", "FINANCE"]),
+  email: emailField,
+  role: z.enum(["ORGANIZER_ADMIN", "ORGANIZER_STAFF", "MAP_EDITOR", "FINANCE"], {
+    error: "Choose one of the available roles.",
+  }),
 });
 
+export type CredentialsInput = z.infer<typeof credentialsSchema>;
+export type RegistrationInput = z.infer<typeof registrationSchema>;

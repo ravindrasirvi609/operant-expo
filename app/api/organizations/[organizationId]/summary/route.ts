@@ -1,11 +1,12 @@
 import { NextResponse } from "next/server";
 import { ObjectId } from "mongodb";
-import { requireOrganizationPermission } from "@/lib/auth/authorization";
+import { requireApiPermission } from "@/lib/auth/authorization";
 import { getDatabase } from "@/lib/db/client";
 
 export async function GET(_: Request, { params }: { params: Promise<{ organizationId: string }> }) {
   const { organizationId } = await params;
-  await requireOrganizationPermission(organizationId, "exhibition:view");
+  const auth = await requireApiPermission(organizationId, "exhibition:view");
+  if (!auth.ok) return auth.response;
   const database = await getDatabase();
   const orgId = new ObjectId(organizationId);
 

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { ObjectId } from "mongodb";
-import { requireOrganizationPermission } from "@/lib/auth/authorization";
+import { requireApiPermission } from "@/lib/auth/authorization";
 import { getDatabase } from "@/lib/db/client";
 import { withTransaction } from "@/lib/db/transaction";
 import { writeAudit } from "@/lib/audit";
@@ -8,7 +8,8 @@ import type { FloorPlanDocument } from "@/models/map";
 
 export async function POST(_: Request, { params }: { params: Promise<{ organizationId: string; floorPlanId: string }> }) {
   const { organizationId, floorPlanId } = await params;
-  await requireOrganizationPermission(organizationId, "map:edit");
+  const auth = await requireApiPermission(organizationId, "map:edit");
+  if (!auth.ok) return auth.response;
   if (!ObjectId.isValid(floorPlanId)) return NextResponse.json({ error: "Invalid floor plan" }, { status: 400 });
 
   const database = await getDatabase();
