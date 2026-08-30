@@ -18,12 +18,31 @@ const OPTIONS = [
   { value: "system", label: "System", icon: Monitor },
 ] as const;
 
+/** No external store to watch — the hook is used purely for its snapshot split. */
+const noopSubscribe = () => () => {};
+
+/**
+ * True only after hydration has finished.
+ *
+ * next-themes reads the stored preference synchronously, so the client's first render already
+ * knows the real theme while the server's markup cannot. Rendering that difference directly is a
+ * hydration mismatch. useSyncExternalStore is the API built for this: React uses the server
+ * snapshot for SSR *and* the hydration pass, then re-renders with the client snapshot — no effect
+ * writing state, and no divergent markup.
+ */
+function useHydrated() {
+  return React.useSyncExternalStore(
+    noopSubscribe,
+    () => true,
+    () => false,
+  );
+}
+
 export function ThemeToggle() {
-  // next-themes leaves `theme` undefined until it has read the stored preference on the client,
-  // which is exactly the signal needed here: server and first client render both fall back to
-  // the system icon, so there is nothing to reconcile and no mounted flag to track.
   const { theme, setTheme } = useTheme();
-  const active = OPTIONS.find((option) => option.value === theme);
+  const hydrated = useHydrated();
+
+  const active = hydrated ? OPTIONS.find((option) => option.value === theme) : undefined;
   const Icon = active?.icon ?? Monitor;
 
   return (
@@ -38,7 +57,9 @@ export function ThemeToggle() {
           <DropdownMenuItem key={option.value} onSelect={() => setTheme(option.value)}>
             <option.icon aria-hidden />
             {option.label}
-            {theme === option.value && <span className="ml-auto text-xs text-[var(--brand-quiet)]">active</span>}
+            {hydrated && theme === option.value && (
+              <span className="ml-auto text-xs text-[var(--brand-quiet)]">active</span>
+            )}
           </DropdownMenuItem>
         ))}
       </DropdownMenuContent>
