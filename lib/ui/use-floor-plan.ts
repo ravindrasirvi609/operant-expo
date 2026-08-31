@@ -78,7 +78,13 @@ export function useFloorPlan({
   exhibitionId: string;
   hallId: string;
 }) {
-  const planPath = `/api/organizations/${organizationId}/exhibitions/${exhibitionId}/halls/${hallId}/floor-plan`;
+  // Screens that cascade their selections (organization, then exhibition, then hall) mount this
+  // hook before every id is known. Without this guard it requested a path with empty segments,
+  // which normalises to a route that does not exist — three wasted 404s and console noise per load.
+  const ready = Boolean(organizationId && exhibitionId && hallId);
+  const planPath = ready
+    ? `/api/organizations/${organizationId}/exhibitions/${exhibitionId}/halls/${hallId}/floor-plan`
+    : "";
   const assetsPath = `/api/organizations/${organizationId}/assets`;
 
   const [payload, setPayload] = React.useState<PlanPayload | null>(null);
@@ -87,6 +93,7 @@ export function useFloorPlan({
   const [saveError, setSaveError] = React.useState("");
 
   const load = React.useCallback(async () => {
+    if (!planPath) return { ok: false as const, status: 0, error: "No hall selected." };
     const result = await apiGet<PlanPayload>(planPath);
     if (result.ok) {
       setPayload(result.data);
@@ -98,6 +105,7 @@ export function useFloorPlan({
   }, [planPath]);
 
   React.useEffect(() => {
+    if (!planPath) return;
     let cancelled = false;
     void apiGet<PlanPayload>(planPath).then((result) => {
       if (cancelled) return;
@@ -289,7 +297,9 @@ export function useFloorPlan({
     assetsPath,
     storageDriver: payload?.storage?.driver ?? "local",
     stallByElementId,
-    loading: payload === null && loadError === "",
+    // Nothing is loading when there is nothing to load, so a screen with no hall chosen renders its
+    // empty state rather than an endless skeleton.
+    loading: ready && payload === null && loadError === "",
     loadError,
     saveState,
     saveError,

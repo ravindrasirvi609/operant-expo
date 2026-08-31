@@ -1,35 +1,32 @@
 "use client";
 
 import * as React from "react";
-import { ExternalLink } from "lucide-react";
+import Link from "next/link";
+import { ChevronRight, ExternalLink } from "lucide-react";
 import { toast } from "sonner";
 
-import { EmbedCodePanel } from "@/components/dashboard/embed-code-panel";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { apiRequest } from "@/lib/http/client";
-import { cn } from "@/lib/utils";
 import type { Exhibition } from "@/components/exhibitions/create-exhibition-form";
 
 /**
- * The lifecycle step offered from each state, and what it means for visitors.
+ * The one lifecycle step offered from each state, with what it means for visitors.
  *
- * PUBLISHED makes the map visible but leaves booking shut, which is exactly the state that made
- * the public flow look broken: a visitor could click a stall and be told "not available" with no
- * explanation. So the published card says plainly that booking is still closed and offers the
- * one action that opens it.
+ * PUBLISHED spells out that booking is still shut, because that is the state which made the public
+ * flow look broken: a visitor could see the map, click a stall, and be told it was unavailable.
  */
 const NEXT_STEP: Record<string, { target: string; label: string; note: string; variant?: "default" | "outline" }> = {
   DRAFT: {
     target: "PUBLISHED",
-    label: "Publish exhibition",
+    label: "Publish",
     note: "Not visible to anyone yet. Needs at least one active hall.",
   },
   PUBLISHED: {
     target: "BOOKING_OPEN",
     label: "Open booking",
-    note: "Visible to visitors, but booking is closed — stalls cannot be reserved yet.",
+    note: "Visible to visitors, but stalls cannot be reserved yet.",
   },
   BOOKING_OPEN: {
     target: "BOOKING_CLOSED",
@@ -40,25 +37,28 @@ const NEXT_STEP: Record<string, { target: string; label: string; note: string; v
   BOOKING_CLOSED: {
     target: "BOOKING_OPEN",
     label: "Reopen booking",
-    note: "Map is visible, but no new bookings are accepted.",
+    note: "The map is visible, but no new bookings are accepted.",
   },
 };
 
 const PUBLIC_LIFECYCLES = new Set(["PUBLISHED", "BOOKING_OPEN", "BOOKING_CLOSED"]);
 
+/**
+ * One exhibition in the list.
+ *
+ * The whole card is a link to the exhibition's own page. It used to expand a hall-management panel
+ * beneath itself instead, which meant the list grew into a workspace and halls, stalls and sharing
+ * had nowhere of their own to live.
+ */
 export function ExhibitionCard({
   exhibition,
   organizationId,
-  selected,
   canManage,
-  onSelect,
   onUpdated,
 }: {
   exhibition: Exhibition;
   organizationId: string;
-  selected: boolean;
   canManage: boolean;
-  onSelect: () => void;
   onUpdated: (exhibition: Exhibition) => void;
 }) {
   const [saving, setSaving] = React.useState(false);
@@ -90,14 +90,17 @@ export function ExhibitionCard({
   }
 
   return (
-    <Card
-      data-active={selected}
-      className={cn("corner-marks p-5", selected ? "border-[var(--brand)]" : "border-[var(--line)]")}
-    >
-      <button onClick={onSelect} className="w-full text-left" aria-expanded={selected}>
+    <Card className="corner-marks">
+      <Link
+        href={`/dashboard/exhibitions/${exhibition._id}`}
+        className="block rounded-t-xl p-5 transition-colors hover:bg-[color-mix(in_srgb,var(--paper-sunken)_60%,transparent)]"
+      >
         <div className="flex items-start justify-between gap-4">
           <div className="min-w-0">
-            <h3 className="font-display text-lg font-semibold text-[var(--ink)]">{exhibition.name}</h3>
+            <h3 className="flex items-center gap-1.5 font-display text-lg font-semibold text-[var(--ink)]">
+              {exhibition.name}
+              <ChevronRight className="size-4 text-[var(--ink-faint)]" aria-hidden />
+            </h3>
             <p className="mt-0.5 truncate font-mono text-sm text-[var(--ink-soft)]">/{exhibition.slug}</p>
           </div>
           <StatusBadge status={exhibition.lifecycle} />
@@ -105,11 +108,10 @@ export function ExhibitionCard({
         <p className="mt-3 font-mono text-sm text-[var(--ink-soft)]">
           {new Date(exhibition.startDate).toLocaleDateString()} – {new Date(exhibition.endDate).toLocaleDateString()}
         </p>
-      </button>
+        {step && <p className="mt-2 text-xs text-[var(--ink-faint)]">{step.note}</p>}
+      </Link>
 
-      {step && <p className="mt-3 text-xs text-[var(--ink-faint)]">{step.note}</p>}
-
-      <div className="mt-4 flex flex-wrap gap-2 border-t border-[var(--line)] pt-4">
+      <div className="flex flex-wrap gap-2 border-t border-[var(--line)] px-5 py-4">
         {step && canManage && (
           <Button
             size="sm"
@@ -120,21 +122,18 @@ export function ExhibitionCard({
             {step.label}
           </Button>
         )}
+        <Button asChild size="sm" variant="outline">
+          <Link href={`/dashboard/exhibitions/${exhibition._id}`}>Manage</Link>
+        </Button>
         {isPublic && (
-          <Button asChild size="sm" variant="outline">
+          <Button asChild size="sm" variant="ghost">
             <a href={`/exhibitions/${exhibition.slug}`} target="_blank" rel="noreferrer">
               <ExternalLink aria-hidden />
-              View public page
+              Public page
             </a>
           </Button>
         )}
       </div>
-
-      {isPublic && (
-        <div className="mt-3 border-t border-[var(--line)] pt-3">
-          <EmbedCodePanel slug={exhibition.slug} name={exhibition.name} />
-        </div>
-      )}
     </Card>
   );
 }
