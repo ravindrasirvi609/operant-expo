@@ -140,7 +140,7 @@ export function PlanWizard({
       <div className="mt-8">
         {activeId === "canvas" && <CanvasStep api={api} onContinue={() => goTo(1)} />}
         {activeId === "layout" && <LayoutStep api={api} />}
-        {activeId === "pricing" && <PricingStep api={api} />}
+        {activeId === "pricing" && <PricingStep api={api} organizationId={organizationId} />}
         {activeId === "review" && (
           <ReviewStep api={api} exhibition={exhibition} organizationId={organizationId} />
         )}

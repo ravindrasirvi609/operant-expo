@@ -515,6 +515,71 @@ export async function deletePlanStall(
 }
 
 /**
+ * Applies the same commercial change to many stalls at once.
+ *
+ * The pricing surface needs this: repricing a section of forty stalls one request at a time is slow
+ * and reports forty separate outcomes. Geometry is deliberately not settable here — a stall's
+ * footprint is its rectangle, and rectangles move on the plan, not in a table.
+ *
+ * Stalls whose status is owned by the booking flow are skipped rather than failing the batch, and
+ * named in the result, so one held stall cannot block repricing the other thirty-nine.
+ */
+export async function updateStallsBulk(
+  database: Db,
+  {
+    plan,
+    organizationId,
+    stallIds,
+    patch,
+    actorId,
+  }: {
+    plan: FloorPlanDocument;
+    organizationId: ObjectId;
+    stallIds: ObjectId[];
+    patch: { basePrice?: number; currency?: string; stallType?: StallDocument["stallType"]; visibility?: StallDocument["visibility"] };
+    actorId?: ObjectId;
+  },
+) {
+  const fields = Object.fromEntries(Object.entries(patch).filter(([, value]) => value !== undefined));
+  if (Object.keys(fields).length === 0) {
+    throw new FloorPlanError("Choose at least one thing to change.", { status: 400, code: "NOTHING_TO_CHANGE" });
+  }
+
+  const stalls = await database
+    .collection<StallDocument>("stalls")
+    .find({ _id: { $in: stallIds }, organizationId, hallId: plan.hallId })
+    .toArray();
+
+  if (stalls.length === 0) {
+    throw new FloorPlanError("None of those stalls are in this hall.", { status: 404, code: "NOT_FOUND" });
+  }
+
+  const now = new Date();
+  const result = await database
+    .collection<StallDocument>("stalls")
+    .updateMany(
+      { _id: { $in: stalls.map((stall) => stall._id!) }, organizationId },
+      { $set: { ...fields, updatedAt: now } },
+    );
+
+  await writeAudit(database, {
+    organizationId,
+    actorId,
+    action: "stall.bulkUpdated",
+    entityType: "Stall",
+    entityId: plan.hallId.toString(),
+    after: { changed: result.modifiedCount, fields: Object.keys(fields) },
+  });
+
+  const requested = new Set(stallIds.map((id) => id.toString()));
+  const found = new Set(stalls.map((stall) => stall._id!.toString()));
+  return {
+    updated: result.modifiedCount,
+    skipped: Array.from(requested).filter((id) => !found.has(id)),
+  };
+}
+
+/**
  * Generates a grid of stalls in one transaction, all or nothing.
  *
  * This is what turns laying out a hall from a hundred drag-and-type actions into one dialog. Every

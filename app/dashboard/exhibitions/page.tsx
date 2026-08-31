@@ -8,7 +8,6 @@ import { useOrganization } from "@/components/providers/organization-provider";
 import { CreateExhibitionForm, type Exhibition } from "@/components/exhibitions/create-exhibition-form";
 import { CreateVenueForm, type Venue } from "@/components/exhibitions/create-venue-form";
 import { ExhibitionCard } from "@/components/exhibitions/exhibition-card";
-import { HallManager } from "@/components/exhibitions/hall-manager";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -31,7 +30,6 @@ export default function ExhibitionsPage() {
   // Server-loaded exhibitions plus anything created or transitioned in this session, so the list
   // reflects a lifecycle change immediately without a full re-read.
   const [overrides, setOverrides] = React.useState<Exhibition[]>([]);
-  const [selectedId, setSelectedId] = React.useState("");
 
   const loading = exhibitionResource.loading;
   const error = exhibitionResource.error || venueResource.error;
@@ -49,8 +47,6 @@ export default function ExhibitionsPage() {
   }, [exhibitionResource.data, overrides]);
 
   const canManage = can("exhibition:manage");
-
-  const selected = exhibitions.find((exhibition) => exhibition._id === selectedId) ?? null;
 
   function upsert(exhibition: Exhibition) {
     setOverrides((current) => [
@@ -98,7 +94,7 @@ export default function ExhibitionsPage() {
               <div>
                 <h2 className="font-display text-xl font-semibold text-[var(--ink)]">Your exhibitions</h2>
                 <p className="mt-1 text-sm text-[var(--ink-soft)]">
-                  Select one to manage its halls and floor plans.
+                  Open one to manage its halls, floor plans and stalls.
                 </p>
               </div>
               <span className="rounded-full border border-[var(--line-strong)] px-3 py-1 font-mono text-xs text-[var(--ink-soft)]">
@@ -125,23 +121,13 @@ export default function ExhibitionsPage() {
                     key={exhibition._id}
                     exhibition={exhibition}
                     organizationId={organizationId}
-                    selected={selectedId === exhibition._id}
                     canManage={canManage}
-                    onSelect={() => setSelectedId((current) => (current === exhibition._id ? "" : exhibition._id))}
                     onUpdated={upsert}
                   />
                 ))}
               </div>
             )}
 
-            {selected && (
-              <HallManager
-                key={selected._id}
-                organizationId={organizationId}
-                exhibitionId={selected._id}
-                exhibitionName={selected.name}
-              />
-            )}
           </section>
 
           <aside className="space-y-5">
@@ -150,10 +136,7 @@ export default function ExhibitionsPage() {
                 <CreateExhibitionForm
                   organizationId={organizationId}
                   venues={venues}
-                  onCreated={(exhibition) => {
-                    upsert(exhibition);
-                    setSelectedId(exhibition._id);
-                  }}
+                  onCreated={upsert}
                 />
                 <CreateVenueForm organizationId={organizationId} onCreated={() => void venueResource.reload()} />
               </>
