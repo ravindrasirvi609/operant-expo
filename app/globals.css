@@ -1,5 +1,5 @@
 @import "tailwindcss";
-@import "tw-animate-css";
+@import "../node_modules/tw-animate-css/dist/tw-animate.css";
 
 /* Class-based dark mode. next-themes toggles `.dark` on <html>, including for the
    "system" setting, so this variant is the single switch for the whole app. */
