@@ -3,7 +3,7 @@ import { ObjectId, type Db } from "mongodb";
 import { isBookingOpen, resolveAvailability, type Availability } from "@/lib/booking/availability";
 import { sweepExpiredHolds } from "@/lib/booking/holds";
 import type { ExhibitionDocument, HallDocument } from "@/models/exhibition";
-import type { AssetDocument, FloorPlanDocument, MapElementDocument } from "@/models/map";
+import type { FloorPlanDocument, MapElementDocument } from "@/models/map";
 import type { BookingDocument, ReservationHoldDocument } from "@/models/booking";
 import type { StallDocument } from "@/models/stall";
 
@@ -39,7 +39,6 @@ export type PublicHall = {
   id: string;
   name: string;
   canvas: { width: number; height: number } | null;
-  backgroundUrl?: string;
   elements: PublicElement[];
   stalls: PublicStall[];
   /** Stall rectangles drawn on the plan that carry no inventory, so nothing can be booked on them. */
@@ -137,16 +136,11 @@ export async function loadPublicExhibition(
       continue;
     }
 
-    const [elements, background] = await Promise.all([
-      database
-        .collection<MapElementDocument>("mapElements")
-        .find({ floorPlanId: plan._id!, visible: true })
-        .sort({ zIndex: 1 })
-        .toArray(),
-      plan.backgroundAssetId
-        ? database.collection<AssetDocument>("assets").findOne({ _id: plan.backgroundAssetId })
-        : null,
-    ]);
+    const elements = await database
+      .collection<MapElementDocument>("mapElements")
+      .find({ floorPlanId: plan._id!, visible: true })
+      .sort({ zIndex: 1 })
+      .toArray();
 
     const hallStalls = allStalls.filter((stall) => stall.hallId.equals(hall._id!));
     const stallByElement = new Map(hallStalls.map((stall) => [stall.floorPlanElementId.toString(), stall]));
@@ -230,7 +224,6 @@ export async function loadPublicExhibition(
       id: hall._id!.toString(),
       name: hall.name,
       canvas: { width: plan.canvasWidth, height: plan.canvasHeight },
-      backgroundUrl: background?.url,
       elements: publicElements,
       stalls: publicStalls,
       unbookableCount,

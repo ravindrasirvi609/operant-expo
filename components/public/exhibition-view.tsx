@@ -184,7 +184,6 @@ export function ExhibitionView({
                     <MapViewer
                       width={hall.canvas.width}
                       height={hall.canvas.height}
-                      backgroundUrl={hall.backgroundUrl}
                       elements={elements}
                       selectedStallId={selectedStallId ?? undefined}
                       // Read-only until booking opens: a map you cannot buy from should not pretend
